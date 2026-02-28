@@ -745,10 +745,17 @@ function renderUserPortal() {
 
   document.getElementById('upCourtsGrid').innerHTML = courts.map(c => {
     var busy = isCurrentlyBusy(c.id, bookings);
-    var todaySlots = bookings.filter(b => b.courtId == c.id && b.date === todayStr && b.status !== 'cancelled');
-    var slotHTML = todaySlots.length
-      ? todaySlots.map(b => '<span class="slot-chip' + (b.isEvent ? ' pending' : '') + '">' + b.start + '–' + b.end + (b.isEvent ? ' [Event]' : '') + '</span>').join('')
-      : '<span class="no-slots">No bookings today</span>';
+    var allSlots = Store.generateSlots();
+    var availableSlots = allSlots.filter(s => !Store.checkConflict(c.id, todayStr, s.start, s.end));
+
+    var slotHTML = '';
+    if (availableSlots.length > 0) {
+      slotHTML = availableSlots.slice(0, 5).map(s => '<span class="slot-chip" style="background:#dcfce7;color:#166534;border-color:#bbf7d0">' + s.start + '–' + s.end + '</span>').join('');
+      if (availableSlots.length > 5) slotHTML += '<span style="font-size:0.7rem;color:var(--muted);margin-left:4px">+' + (availableSlots.length - 5) + ' more</span>';
+    } else {
+      slotHTML = '<span class="no-slots">Fully booked today</span>';
+    }
+
     var capacityNote = c.maxPlayers ? '<span style="font-size:0.7rem;color:var(--muted)">Max ' + c.maxPlayers + ' players · Team of ' + (c.teamSize || 1) + '</span>' : '';
     return '<div class="card card-pad card-accent-top court-card">' +
       '<div class="court-card-top">' +
@@ -760,8 +767,8 @@ function renderUserPortal() {
       '<span class="court-rate-value">Rs.' + c.baseRate + '/hr ' + (features.dynamicPricing ? '<span class="peak-badge" style="margin-left:4px">Peak rates apply</span>' : '') + '</span>' +
       '</div>' +
       (capacityNote ? '<div style="margin:6px 0">' + capacityNote + '</div>' : '') +
-      '<div class="slot-label" style="margin-top:0.75rem">Today\'s Slots</div>' +
-      '<div class="slot-list">' + slotHTML + '</div>' +
+      '<div class="slot-label" style="margin-top:0.75rem">Available Slots Today</div>' +
+      '<div class="slot-list" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">' + slotHTML + '</div>' +
       '</div>';
   }).join('') || '<div class="empty-state" style="grid-column:1/-1">No active courts available.</div>';
 

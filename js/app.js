@@ -32,10 +32,18 @@ function renderCourts() {
 
   document.getElementById('courtsGrid').innerHTML = courts.map(c => {
     const busy = isCurrentlyBusy(c.id, bookings);
-    const todaySlots = bookings.filter(b => b.courtId == c.id && b.date === todayStr && b.status !== 'cancelled');
-    const slotHTML = todaySlots.length
-      ? todaySlots.map(b => `<span class="slot-chip${b.isEvent ? ' pending' : ''}">${b.start}–${b.end}${b.isEvent ? ' [Event]' : ''}</span>`).join('')
-      : '<span class="no-slots">No bookings today</span>';
+    const allSlots = Store.generateSlots();
+    const availableSlots = allSlots.filter(s => !Store.checkConflict(c.id, todayStr, s.start, s.end));
+
+    let slotHTML = '';
+    if (availableSlots.length > 0) {
+      // Display up to 5 available slots neatly to save space, and add a count if there are more
+      slotHTML = availableSlots.slice(0, 5).map(s => `<span class="slot-chip" style="background:#dcfce7;color:#166534;border-color:#bbf7d0">${s.start}–${s.end}</span>`).join('');
+      if (availableSlots.length > 5) slotHTML += `<span style="font-size:0.7rem;color:var(--muted);margin-left:4px">+${availableSlots.length - 5} more</span>`;
+    } else {
+      slotHTML = '<span class="no-slots">Fully booked today</span>';
+    }
+
     const capacityNote = c.maxPlayers ? `<span style="font-size:0.7rem;color:var(--muted)">Max ${c.maxPlayers} players · Team of ${c.teamSize || 1}</span>` : '';
     return `<div class="card card-pad card-accent-top court-card">
       <div class="court-card-top">
@@ -47,9 +55,9 @@ function renderCourts() {
         <span class="court-rate-value">Rs.${c.baseRate}/hr ${features.dynamicPricing ? '<span class="peak-badge" style="margin-left:4px">Peak rates apply</span>' : ''}</span>
       </div>
       ${capacityNote ? `<div style="margin:6px 0">${capacityNote}</div>` : ''}
-      <div class="slot-label" style="margin-top:0.75rem">Today's Slots</div>
-      <div class="slot-list">${slotHTML}</div>
-      <button class="btn btn-grad btn-full" style="margin-top:1rem" onclick="selectCourt(${c.id})" ${busy && todaySlots.every(b => b.isEvent) ? 'disabled' : ''}>Book This Court</button>
+      <div class="slot-label" style="margin-top:0.75rem">Available Slots Today</div>
+      <div class="slot-list" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">${slotHTML}</div>
+      <button class="btn btn-grad btn-full" style="margin-top:1rem" onclick="selectCourt(${c.id})">Book This Court</button>
     </div>`;
   }).join('') || '<div class="empty-state" style="grid-column:1/-1">No courts available at this time.</div>';
 
@@ -83,6 +91,7 @@ function renderSlotGrid() {
   const court = (Store.get('courts') || []).find(c => c.id === selection.courtId);
   const features = Store.get('features') || Store.DEFAULTS.features;
   const grid = document.getElementById('slotGrid');
+  const pricing = Store.get('pricing') || Store.DEFAULTS.pricing;
 
   if (!slots.length) { grid.innerHTML = '<div class="empty-state">No slots configured. Ask admin to set up time slots.</div>'; return; }
 
@@ -98,10 +107,21 @@ function renderSlotGrid() {
     else if (full) { cls += ' slot-full'; state = 'full'; }
     else if (conflict) { cls += ' slot-booked'; state = 'booked'; }
     else if (sel) { cls += ' slot-selected'; }
+
+    let peakBadge = '';
+    if (features.dynamicPricing && state === 'available') {
+      const peak = (pricing.peakHours || []).find(p => {
+        const overlap = Math.max(0, Math.min(Store.mins(s.end), Store.mins(p.end)) - Math.max(Store.mins(s.start), Store.mins(p.start)));
+        return overlap > 0;
+      });
+      if (peak) peakBadge = `<div style="margin-top:4px"><span class="peak-badge">${peak.multiplier}x Rate</span></div>`;
+    }
+
     const label = state === 'event' ? 'Event' : state === 'full' ? 'Full' : state === 'booked' ? 'Booked' : 'Available';
     return `<div class="${cls}" onclick="${(state === 'available' || sel) ? `selectSlot('${s.start}','${s.end}')` : ''}" title="${s.start}–${s.end}: ${label}${maxP ? ` (${playerCount}/${maxP} players)` : ''}">
       <div style="font-size:0.78rem;font-weight:600;font-family:var(--mono)">${s.start}</div>
       <div style="font-size:0.68rem;color:inherit;margin-top:2px">${label}</div>
+      ${peakBadge}
       ${maxP && state === 'available' ? `<div style="font-size:0.6rem;opacity:0.7">${playerCount}/${maxP}</div>` : ''}
     </div>`;
   }).join('');
@@ -176,7 +196,6 @@ function renderAddOns() {
     const isVerified = m.id === 'none' || (userVerifiedMem && userVerifiedMem.membershipId === m.id);
     const locked = !isVerified;
     return `<div class="membership-card ${selection.membership === m.id ? 'selected' : ''} ${m.id === 'none' ? 'none' : ''} ${locked ? 'mem-locked' : ''}"
-      onclick="${locked ? '' : ''}" ${locked ? '' : ''}
       style="${locked ? 'opacity:0.45;cursor:not-allowed;' : ''}"
       ${!locked ? `onclick="selectMembership('${m.id}')"` : ''}>
       <div class="mem-name">${m.name}</div>
