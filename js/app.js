@@ -53,22 +53,12 @@ function renderCourts() {
     </div>`;
   }).join('') || '<div class="empty-state" style="grid-column:1/-1">No courts available at this time.</div>';
 
-  renderSummaryStats(courts, bookings);
+  // stats removed from UI
 }
 
 function isCurrentlyBusy(courtId, bookings) {
   const now = today.getHours() * 60 + today.getMinutes();
   return bookings.some(b => b.courtId == courtId && b.date === todayStr && b.status !== 'cancelled' && Store.mins(b.start) <= now && now < Store.mins(b.end));
-}
-
-function renderSummaryStats(courts, bookings) {
-  const tb = bookings.filter(b => b.date === todayStr && b.status !== 'cancelled');
-  const busy = courts.filter(c => isCurrentlyBusy(c.id, bookings)).length;
-  document.getElementById('statTotal').textContent = courts.length;
-  document.getElementById('statAvail').textContent = courts.length - busy;
-  document.getElementById('statBooked').textContent = busy;
-  document.getElementById('statToday').textContent = tb.length;
-  document.getElementById('statRevenue').textContent = `Rs.${tb.reduce((s, b) => s + (b.cost || 0), 0)}`;
 }
 
 function selectCourt(id) { selection.courtId = id; setStep(2); }

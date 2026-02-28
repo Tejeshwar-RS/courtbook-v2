@@ -77,7 +77,9 @@
   <div class="admin-layout">
     <aside class="sidebar">
       <div class="sidebar-section-label">System</div>
-      <div class="sidebar-item active" data-mod="features" onclick="showModule('features')"> <span
+      <div class="sidebar-item active" data-mod="userportal" onclick="showModule('userportal')"> <span
+          class="sidebar-dot"></span>Courts Overview</div>
+      <div class="sidebar-item" data-mod="features" onclick="showModule('features')"> <span
           class="sidebar-dot"></span>Feature Toggles</div>
       <div class="sidebar-divider"></div>
       <div class="sidebar-section-label">Configuration</div>
@@ -111,8 +113,32 @@
 
     <main class="admin-content">
 
+      <!-- USER PORTAL COURTS OVERVIEW -->
+      <div id="mod-userportal" class="module-panel active">
+        <div class="section-header">
+          <div class="section-title">Courts Overview</div>
+          <span class="count-badge" id="upAvailCount"></span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 270px;gap:1.5rem;margin-bottom:2.5rem">
+          <div class="courts-grid" id="upCourtsGrid" style="margin-bottom:0"></div>
+          <div class="stats-dark" style="height:fit-content">
+            <div class="stats-dark-title">Live Summary</div>
+            <div class="stat-row"><span class="stat-label">Total Courts</span><span class="stat-value stat-orange"
+                id="upStatTotal"></span></div>
+            <div class="stat-row"><span class="stat-label">Available Now</span><span class="stat-value stat-green"
+                id="upStatAvail"></span></div>
+            <div class="stat-row"><span class="stat-label">Booked Now</span><span class="stat-value stat-red"
+                id="upStatBooked"></span></div>
+            <div class="stat-row"><span class="stat-label">Bookings Today</span><span class="stat-value stat-orange"
+                id="upStatToday"></span></div>
+            <div class="stat-row"><span class="stat-label">Revenue Today</span><span class="stat-value stat-green"
+                id="upStatRevenue"></span></div>
+          </div>
+        </div>
+      </div>
+
       <!-- FEATURES -->
-      <div id="mod-features" class="module-panel active">
+      <div id="mod-features" class="module-panel">
         <div class="section-header">
           <div class="section-title">Feature Toggles</div>
         </div>
@@ -591,7 +617,8 @@
             per hour</div>
           <div class="heatmap-row" id="hourHeatmap"></div>
           <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--muted);margin-top:4px">
-            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span></div>
+            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span>
+          </div>
         </div>
         <div class="card card-pad">
           <div style="font-size:0.82rem;font-weight:600;margin-bottom:0.75rem">Membership Breakdown</div>
@@ -614,7 +641,6 @@
       document.getElementById('userBar').innerHTML = `
       <span style="font-size:0.78rem;color:#a3a3a3">${s?.user?.email || ''}</span>
       <span class="badge badge-accent">Admin</span>
-      <a href="index.html" class="header-nav-link">User Portal</a>
       <button class="header-nav-link" onclick="Auth.logout()" style="cursor:pointer;background:none;border:1px solid #444;color:#a3a3a3">Sign Out</button>`;
     }
   </script>

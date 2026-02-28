@@ -84,8 +84,9 @@
           </svg></div>
         <span class="logo-text">Court<span>Book</span></span>
       </a>
-      <div class="header-meta" id="userBar" style="display:flex;align-items:center;gap:0.75rem">
-        <span id="headerDate"></span>
+      <div style="display:flex;align-items:center;gap:1.5rem">
+        <span id="headerDate" style="color:#a3a3a3;font-size:0.85rem"></span>
+        <div class="header-meta" id="userBar" style="display:flex;align-items:center;gap:0.75rem"></div>
       </div>
     </div>
   </header>
@@ -98,22 +99,8 @@
       <div class="section-title">Courts Overview</div>
       <span class="count-badge" id="availCount"></span>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 270px;gap:1.5rem;margin-bottom:2.5rem">
+    <div style="display:grid;grid-template-columns:1fr;gap:1.5rem;margin-bottom:2.5rem">
       <div class="courts-grid" id="courtsGrid" style="margin-bottom:0"></div>
-      <div class="stats-dark" style="height:fit-content">
-        <div class="stats-dark-title">Live Summary</div>
-        <div class="stat-row"><span class="stat-label">Total Courts</span><span class="stat-value stat-orange"
-            id="statTotal"></span></div>
-        <div class="stat-row"><span class="stat-label">Available Now</span><span class="stat-value stat-green"
-            id="statAvail"></span></div>
-        <div class="stat-row"><span class="stat-label">Booked Now</span><span class="stat-value stat-red"
-            id="statBooked"></span></div>
-        <div class="stat-row"><span class="stat-label">Bookings Today</span><span class="stat-value stat-orange"
-            id="statToday"></span></div>
-        <div class="stat-row"><span class="stat-label">Revenue Today</span><span class="stat-value stat-green"
-            id="statRevenue"></span></div>
-        <p class="hint-text">Click "Book This Court" on any available court card to start your booking flow.</p>
-      </div>
     </div>
 
     <!-- Booking Flow -->

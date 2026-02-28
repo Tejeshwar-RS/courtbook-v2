@@ -105,14 +105,21 @@ async function saveCourt() {
   if (editingCourtIdx !== null) {
     var cId = courts[editingCourtIdx].id;
     const { error } = await supabaseClient.from('courts').update({ name, sport, base_rate: rate, max_players: maxPlayers, team_size: teamSize }).eq('id', cId);
-    if (!error) adminAlert('"' + name + '" updated.');
+    if (!error) {
+      courts[editingCourtIdx] = { ...courts[editingCourtIdx], name, sport, baseRate: rate, maxPlayers: maxPlayers, teamSize: teamSize };
+      adminAlert('"' + name + '" updated.');
+    }
   } else {
-    const { error } = await supabaseClient.from('courts').insert({ name, sport, base_rate: rate, max_players: maxPlayers, team_size: teamSize, active: true });
-    if (!error) adminAlert('"' + name + '" added.');
+    const { error, data } = await supabaseClient.from('courts').insert({ name, sport, base_rate: rate, max_players: maxPlayers, team_size: teamSize, active: true }).select().single();
+    if (!error) {
+      courts.push({ ...data, baseRate: rate, maxPlayers: maxPlayers, teamSize: teamSize });
+      adminAlert('"' + name + '" added.');
+    }
   }
 
   cancelEditCourt();
   renderCourts();
+  if (typeof renderUserPortal === 'function') renderUserPortal();
 }
 
 async function toggleCourtActive(i) {
@@ -122,8 +129,10 @@ async function toggleCourtActive(i) {
 
   const { error } = await supabaseClient.from('courts').update({ active: newState }).eq('id', c.id);
   if (!error) {
+    c.active = newState;
     adminAlert('"' + c.name + '" ' + (newState ? 'activated' : 'deactivated') + '. Change is live on user portal.');
     renderCourts();
+    if (typeof renderUserPortal === 'function') renderUserPortal();
   }
 }
 
@@ -133,9 +142,11 @@ async function deleteCourt(i) {
 
   const { error } = await supabaseClient.from('courts').delete().eq('id', c.id);
   if (!error) {
+    courts.splice(i, 1);
     adminAlert('"' + c.name + '" removed.');
     cancelEditCourt();
     renderCourts();
+    if (typeof renderUserPortal === 'function') renderUserPortal();
   }
 }
 
@@ -478,15 +489,14 @@ function renderEvents() {
       '<td><button class="btn btn-sm btn-danger" onclick="deleteEvent(' + i + ')">Remove</button></td></tr>';
   }).join('') || '<tr><td colspan="6"><div class="empty-state">No events scheduled.</div></td></tr>';
 
-  // Populate court picker checkboxes
   var wrap = document.getElementById('eventCourtPicker');
   if (wrap) {
-    wrap.innerHTML = courts.map(function (c) {
+    wrap.innerHTML = courts.filter(c => c.active).map(function (c) {
       return '<label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;cursor:pointer;padding:4px 0">' +
         '<input type="checkbox" value="' + c.id + '" style="width:auto;margin:0"> ' +
         c.name + ' (' + c.sport + ')' +
         '</label>';
-    }).join('');
+    }).join('') || '<div style="font-size:0.82rem;color:var(--muted)">No active courts available</div>';
   }
 }
 
@@ -717,8 +727,56 @@ function clearAllNotifs() {
   adminAlert('All notifications cleared.');
 }
 
+/* ======== USER PORTAL SECTION ======== */
+function renderUserPortal() {
+  var courts = (Store.get('courts') || []).filter(c => c.active); // only active courts shown
+  var bookings = Store.get('bookings') || [];
+  var features = Store.get('features') || Store.DEFAULTS.features;
+  var today = new Date();
+  var todayStr = today.toISOString().split('T')[0];
+
+  function isCurrentlyBusy(courtId, bookingsArr) {
+    var now = today.getHours() * 60 + today.getMinutes();
+    return bookingsArr.some(b => b.courtId == courtId && b.date === todayStr && b.status !== 'cancelled' && Store.mins(b.start) <= now && now < Store.mins(b.end));
+  }
+
+  var avail = courts.filter(c => !isCurrentlyBusy(c.id, bookings)).length;
+  document.getElementById('upAvailCount').textContent = avail + ' of ' + courts.length + ' available';
+
+  document.getElementById('upCourtsGrid').innerHTML = courts.map(c => {
+    var busy = isCurrentlyBusy(c.id, bookings);
+    var todaySlots = bookings.filter(b => b.courtId == c.id && b.date === todayStr && b.status !== 'cancelled');
+    var slotHTML = todaySlots.length
+      ? todaySlots.map(b => '<span class="slot-chip' + (b.isEvent ? ' pending' : '') + '">' + b.start + '–' + b.end + (b.isEvent ? ' [Event]' : '') + '</span>').join('')
+      : '<span class="no-slots">No bookings today</span>';
+    var capacityNote = c.maxPlayers ? '<span style="font-size:0.7rem;color:var(--muted)">Max ' + c.maxPlayers + ' players · Team of ' + (c.teamSize || 1) + '</span>' : '';
+    return '<div class="card card-pad card-accent-top court-card">' +
+      '<div class="court-card-top">' +
+      '<div><div class="court-name">' + c.name + '</div><div class="court-sport">' + c.sport + '</div></div>' +
+      '<span class="badge ' + (busy ? 'badge-booked' : 'badge-available') + '">' + (busy ? 'Booked' : 'Available') + '</span>' +
+      '</div>' +
+      '<div class="court-rate-row">' +
+      '<span class="court-rate-label">Base Rate</span>' +
+      '<span class="court-rate-value">Rs.' + c.baseRate + '/hr ' + (features.dynamicPricing ? '<span class="peak-badge" style="margin-left:4px">Peak rates apply</span>' : '') + '</span>' +
+      '</div>' +
+      (capacityNote ? '<div style="margin:6px 0">' + capacityNote + '</div>' : '') +
+      '<div class="slot-label" style="margin-top:0.75rem">Today\'s Slots</div>' +
+      '<div class="slot-list">' + slotHTML + '</div>' +
+      '</div>';
+  }).join('') || '<div class="empty-state" style="grid-column:1/-1">No active courts available.</div>';
+
+  var tb = bookings.filter(b => b.date === todayStr && b.status !== 'cancelled');
+  var busyCount = courts.filter(c => isCurrentlyBusy(c.id, bookings)).length;
+  document.getElementById('upStatTotal').textContent = courts.length;
+  document.getElementById('upStatAvail').textContent = courts.length - busyCount;
+  document.getElementById('upStatBooked').textContent = busyCount;
+  document.getElementById('upStatToday').textContent = tb.length;
+  document.getElementById('upStatRevenue').textContent = 'Rs.' + tb.reduce((s, b) => s + (b.cost || 0), 0);
+}
+
 /* ======== RENDER MAP ======== */
 var renders = {
+  userportal: renderUserPortal,
   features: renderFeatures,
   courts: renderCourts,
   timeslots: renderTimeSlots,
@@ -736,7 +794,7 @@ var renders = {
 /* ======== INIT ======== */
 (async function initAdmin() {
   await Store.init();
-  showModule('features');
+  showModule('userportal');
 })();
 
 // Automatically refresh UI on background cross-tab or Supabase real-time updates

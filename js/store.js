@@ -100,21 +100,21 @@ const Store = (() => {
     supabaseClient.channel('custom-all-channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'courts' }, payload => {
         const mappedCourt = payload.new ? { ...payload.new, baseRate: payload.new.base_rate, maxPlayers: payload.new.max_players, teamSize: payload.new.team_size } : null;
-        if (payload.eventType === 'INSERT') cache.courts.push(mappedCourt);
+        if (payload.eventType === 'INSERT' && !cache.courts.some(c => c.id === mappedCourt.id)) cache.courts.push(mappedCourt);
         if (payload.eventType === 'UPDATE') cache.courts = cache.courts.map(c => c.id === payload.new.id ? mappedCourt : c);
         if (payload.eventType === 'DELETE') cache.courts = cache.courts.filter(c => c.id !== payload.old.id);
-        window.dispatchEvent(new Event('storage', { bubbles: true })); // trigger UI update
+        const ev = new Event('storage', { bubbles: true }); ev.key = 'cb_courts'; window.dispatchEvent(ev);
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, payload => {
         const mappedBooking = payload.new ? { ...payload.new, courtId: payload.new.court_id, courtName: payload.new.court_name, start: payload.new.start_time, end: payload.new.end_time, isEvent: payload.new.is_event } : null;
-        if (payload.eventType === 'INSERT') cache.bookings.push(mappedBooking);
+        if (payload.eventType === 'INSERT' && !cache.bookings.some(b => b.id === mappedBooking.id)) cache.bookings.push(mappedBooking);
         if (payload.eventType === 'UPDATE') cache.bookings = cache.bookings.map(b => b.id === payload.new.id ? mappedBooking : b);
         if (payload.eventType === 'DELETE') cache.bookings = cache.bookings.filter(b => b.id !== payload.old.id);
-        window.dispatchEvent(new Event('storage', { bubbles: true }));
+        const ev = new Event('storage', { bubbles: true }); ev.key = 'cb_bookings'; window.dispatchEvent(ev);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, payload => {
         cache.settings = { ...cache.settings, ...payload.new };
-        window.dispatchEvent(new Event('storage', { bubbles: true }));
+        const ev = new Event('storage', { bubbles: true }); ev.key = 'cb_settings'; window.dispatchEvent(ev);
       })
       .subscribe();
 
