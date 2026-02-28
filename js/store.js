@@ -1,0 +1,352 @@
+/* js/store.js — Supabase Central Data Store */
+const Store = (() => {
+  const DEFAULTS = {
+    // We keep defaults here just for fallback if the db is completely empty
+    timeSlots: { open: '06:00', close: '22:00', slotDuration: 60, blocked: [] },
+    pricing: {
+      peakHours: [
+        { label: 'Morning Peak', start: '07:00', end: '09:00', multiplier: 1.3 },
+        { label: 'Evening Peak', start: '17:00', end: '21:00', multiplier: 1.5 }
+      ]
+    },
+    memberships: [
+      { id: 'none', name: 'No Membership', discount: 0, priority: 0 },
+      { id: 'Basic', name: 'Basic', discount: 0.05, priority: 1 },
+      { id: 'Premium', name: 'Premium', discount: 0.15, priority: 2 },
+      { id: 'Academy', name: 'Academy', discount: 0.25, priority: 3 }
+    ],
+    equipment: [
+      { id: 'racket', name: 'Racket', price: 50, stock: 10, unit: 'per session' },
+      { id: 'shuttle', name: 'Shuttlecock', price: 30, stock: 20, unit: 'per session' },
+      { id: 'ball', name: 'Sports Ball', price: 40, stock: 8, unit: 'per session' },
+      { id: 'shoes', name: 'Court Shoes', price: 80, stock: 6, unit: 'per session' },
+      { id: 'knee_pad', name: 'Knee Pads', price: 60, stock: 5, unit: 'per session' }
+    ],
+    bundles: [
+      { id: 'b1', name: 'Starter Pack', items: ['racket', 'shuttle'], discount: 10, price: 70 },
+      { id: 'b2', name: 'Pro Kit', items: ['racket', 'ball', 'shoes'], discount: 20, price: 150 }
+    ],
+    promoCodes: [
+      { code: 'WELCOME10', type: 'percent', value: 10, usesLeft: 100, active: true },
+      { code: 'FLAT50', type: 'fixed', value: 50, usesLeft: 50, active: true }
+    ],
+    features: {
+      dynamicPricing: true,
+      memberships: true,
+      equipment: true,
+      bundles: true,
+      waitlist: true,
+      concurrencyLock: true,
+      promoCodes: true,
+      slotCapacity: true,
+      notifications: true,
+      events: true
+    }
+  };
+
+  /* ---- Local Memory Cache ---- */
+  let cache = {
+    courts: [],
+    bookings: [],
+    events: [], // Storing events in local memory for now or pushing them as bookings
+    notifications: [],
+    settings: {
+      features: DEFAULTS.features,
+      time_slots: DEFAULTS.timeSlots,
+      pricing: DEFAULTS.pricing,
+      memberships: DEFAULTS.memberships,
+      equipment: DEFAULTS.equipment,
+      bundles: DEFAULTS.bundles,
+      promo_codes: DEFAULTS.promoCodes,
+      verified_members: []
+    }
+  };
+
+  /* Local only locks (Waitlist + Lock mechanism stays local for simplicity or can be migrated) */
+  let localState = {
+    waitlist: [],
+    pendingLocks: {}
+  };
+
+  /* ---- Core Initialization ---- */
+  async function init() {
+    if (!window.supabaseClient) return;
+
+    // 1. Fetch Courts
+    const { data: courts } = await supabaseClient.from('courts').select('*').order('id');
+    if (courts) {
+      cache.courts = courts.map(c => ({
+        ...c,
+        baseRate: c.base_rate, maxPlayers: c.max_players, teamSize: c.team_size
+      }));
+    }
+
+    // 2. Fetch Bookings (Active only for optimization)
+    const { data: bookings } = await supabaseClient.from('bookings').select('*');
+    if (bookings) {
+      cache.bookings = bookings.map(b => ({
+        ...b,
+        courtId: b.court_id, courtName: b.court_name, start: b.start_time, end: b.end_time, isEvent: b.is_event
+      }));
+    }
+
+    // 3. Fetch Settings (Assuming id=1 always exists due to our setup script)
+    const { data: settingsRow } = await supabaseClient.from('app_settings').select('*').eq('id', 1).single();
+    if (settingsRow) {
+      cache.settings = { ...cache.settings, ...settingsRow };
+    }
+
+    // 4. Setup Realtime Subscriptions
+    supabaseClient.channel('custom-all-channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'courts' }, payload => {
+        const mappedCourt = payload.new ? { ...payload.new, baseRate: payload.new.base_rate, maxPlayers: payload.new.max_players, teamSize: payload.new.team_size } : null;
+        if (payload.eventType === 'INSERT') cache.courts.push(mappedCourt);
+        if (payload.eventType === 'UPDATE') cache.courts = cache.courts.map(c => c.id === payload.new.id ? mappedCourt : c);
+        if (payload.eventType === 'DELETE') cache.courts = cache.courts.filter(c => c.id !== payload.old.id);
+        window.dispatchEvent(new Event('storage', { bubbles: true })); // trigger UI update
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, payload => {
+        const mappedBooking = payload.new ? { ...payload.new, courtId: payload.new.court_id, courtName: payload.new.court_name, start: payload.new.start_time, end: payload.new.end_time, isEvent: payload.new.is_event } : null;
+        if (payload.eventType === 'INSERT') cache.bookings.push(mappedBooking);
+        if (payload.eventType === 'UPDATE') cache.bookings = cache.bookings.map(b => b.id === payload.new.id ? mappedBooking : b);
+        if (payload.eventType === 'DELETE') cache.bookings = cache.bookings.filter(b => b.id !== payload.old.id);
+        window.dispatchEvent(new Event('storage', { bubbles: true }));
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, payload => {
+        cache.settings = { ...cache.settings, ...payload.new };
+        window.dispatchEvent(new Event('storage', { bubbles: true }));
+      })
+      .subscribe();
+
+    // Restore local-only transients
+    try {
+      const waitlist = JSON.parse(localStorage.getItem('cb_waitlist'));
+      if (waitlist) localState.waitlist = waitlist;
+      const notifs = JSON.parse(localStorage.getItem('cb_notifications'));
+      if (notifs) cache.notifications = notifs;
+      const evs = JSON.parse(localStorage.getItem('cb_events'));
+      if (evs) cache.events = evs;
+      const locks = JSON.parse(localStorage.getItem('cb_pendingLocks'));
+      if (locks) localState.pendingLocks = locks;
+    } catch (e) { }
+  }
+
+  /* ---- Sync Getter (Reading from Cache) ---- */
+  function get(key) {
+    if (key === 'courts') return cache.courts;
+    if (key === 'bookings') return cache.bookings;
+    if (key === 'events') return cache.events;
+    if (key === 'notifications') return cache.notifications;
+
+    // Settings mappings
+    if (key === 'features') return cache.settings.features;
+    if (key === 'timeSlots') return cache.settings.time_slots;
+    if (key === 'pricing') return cache.settings.pricing;
+    if (key === 'memberships') return cache.settings.memberships;
+    if (key === 'equipment') return cache.settings.equipment;
+    if (key === 'bundles') return cache.settings.bundles;
+    if (key === 'promoCodes') return cache.settings.promo_codes;
+    if (key === 'verifiedMembers') return cache.settings.verified_members;
+
+    // Transients
+    if (key === 'waitlist') return localState.waitlist;
+    if (key === 'pendingLocks') return localState.pendingLocks;
+
+    return null;
+  }
+
+  /* ---- Asynchronous Setters (Writing to Supabase) ---- */
+  async function updateSetting(key, val) {
+    // Determine the map key in the DB
+    const colMap = {
+      features: 'features', timeSlots: 'time_slots', pricing: 'pricing',
+      memberships: 'memberships', equipment: 'equipment', bundles: 'bundles',
+      promoCodes: 'promo_codes', verifiedMembers: 'verified_members'
+    };
+    const col = colMap[key];
+    if (col) {
+      cache.settings[col] = val; // optimistic updates
+      await supabaseClient.from('app_settings').update({ [col]: val }).eq('id', 1);
+    }
+  }
+
+  // Local/Transient Setters (for waitlist, notifications, etc)
+  function setLocal(key, val) {
+    if (key === 'waitlist') localState.waitlist = val;
+    else if (key === 'pendingLocks') localState.pendingLocks = val;
+    else if (key === 'notifications') cache.notifications = val;
+    else if (key === 'events') cache.events = val;
+
+    localStorage.setItem('cb_' + key, JSON.stringify(val));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  /* ---- Helpers ---- */
+  function mins(t) {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+  }
+  function toTime(m) {
+    return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  }
+
+  /* ---- Generate slot list from timeSlots config ---- */
+  function generateSlots() {
+    const ts = get('timeSlots') || DEFAULTS.timeSlots;
+    const dur = ts.slotDuration || 60;
+    const s = mins(ts.open);
+    const e = mins(ts.close);
+    const slots = [];
+    for (let t = s; t + dur <= e; t += dur) {
+      slots.push({ start: toTime(t), end: toTime(t + dur) });
+    }
+    return slots;
+  }
+
+  /* ---- Cost calculation ---- */
+  function calcCost(courtId, start, end, membershipId, equipmentIds, promoCode, players) {
+    membershipId = membershipId || 'none';
+    equipmentIds = equipmentIds || [];
+    promoCode = promoCode || '';
+    players = players || 1;
+
+    const courts = get('courts') || [];
+    const pricing = get('pricing') || DEFAULTS.pricing;
+    const equip = get('equipment') || [];
+    const features = get('features') || DEFAULTS.features;
+    const members = get('memberships') || DEFAULTS.memberships;
+    const promos = get('promoCodes') || [];
+    const court = courts.find(c => c.id == courtId);
+
+    if (!court) return { base: 0, peakSurcharge: 0, memberSaving: 0, equipCost: 0, promoSaving: 0, total: 0, durMins: 0 };
+
+    const durMins = mins(end) - mins(start);
+    let base = Math.ceil((durMins / 60) * court.baseRate);
+
+    // Peak surcharge
+    let peakSurcharge = 0;
+    if (features.dynamicPricing) {
+      (pricing.peakHours || []).forEach(p => {
+        const overlap = Math.max(0,
+          Math.min(mins(end), mins(p.end)) - Math.max(mins(start), mins(p.start))
+        );
+        if (overlap > 0) peakSurcharge += Math.ceil((overlap / 60) * court.baseRate * (p.multiplier - 1));
+      });
+    }
+
+    // Member discount
+    let memberSaving = 0;
+    if (features.memberships) {
+      const mem = members.find(m => m.id === membershipId);
+      if (mem && mem.discount > 0) memberSaving = Math.floor((base + peakSurcharge) * mem.discount);
+    }
+
+    // Equipment cost
+    let equipCost = 0;
+    if (features.equipment) {
+      equipmentIds.forEach(eid => {
+        const e = equip.find(x => x.id === eid);
+        if (e) equipCost += e.price;
+      });
+    }
+
+    // Promo saving
+    let promoSaving = 0;
+    if (features.promoCodes && promoCode) {
+      const promo = promos.find(p =>
+        p.code === promoCode.toUpperCase() && p.active && p.usesLeft > 0
+      );
+      if (promo) {
+        const subtotal = base + peakSurcharge - memberSaving + equipCost;
+        promoSaving = promo.type === 'percent'
+          ? Math.floor(subtotal * promo.value / 100)
+          : Math.min(promo.value, subtotal);
+      }
+    }
+
+    const total = Math.max(0, base + peakSurcharge - memberSaving + equipCost - promoSaving);
+    return { base, peakSurcharge, memberSaving, equipCost, promoSaving, total, durMins };
+  }
+
+  /* ---- Overlap & conflict ---- */
+  function isOverlap(s1, e1, s2, e2) { return s1 < e2 && e1 > s2; }
+
+  function checkConflict(courtId, date, start, end, excludeId) {
+    return (get('bookings') || [])
+      .filter(b => b.id !== excludeId)
+      .some(b =>
+        b.courtId == courtId &&
+        b.date === date &&
+        b.status !== 'cancelled' &&
+        isOverlap(start, end, b.start, b.end)
+      );
+  }
+
+  /* ---- Slot player count (for capacity control) ---- */
+  function getSlotPlayerCount(courtId, date, start, end) {
+    return (get('bookings') || [])
+      .filter(b =>
+        b.courtId == courtId &&
+        b.date === date &&
+        b.status !== 'cancelled' &&
+        b.start === start &&
+        b.end === end
+      )
+      .reduce((s, b) => s + (b.players || 1), 0);
+  }
+
+  /* ---- Concurrency locks ---- */
+  function _slotKey(cid, date, s, e) { return cid + '|' + date + '|' + s + '|' + e; }
+
+  function getPendingLock(courtId, date, start, end) {
+    const locks = get('pendingLocks') || {};
+    const key = _slotKey(courtId, date, start, end);
+    const lock = locks[key];
+    if (!lock) return null;
+    if (Date.now() > lock.expires) { delete locks[key]; setLocal('pendingLocks', locks); return null; }
+    return lock;
+  }
+
+  function acquireLock(courtId, date, start, end, player, priority) {
+    const locks = get('pendingLocks') || {};
+    const key = _slotKey(courtId, date, start, end);
+    const ex = getPendingLock(courtId, date, start, end);
+    if (ex && ex.priority >= priority) return false;
+    locks[key] = { player, priority, expires: Date.now() + 5 * 60 * 1000 };
+    setLocal('pendingLocks', locks);
+    return true;
+  }
+
+  function releaseLock(courtId, date, start, end) {
+    const locks = get('pendingLocks') || {};
+    delete locks[_slotKey(courtId, date, start, end)];
+    setLocal('pendingLocks', locks);
+  }
+
+  /* ---- Promo application ---- */
+  async function applyPromo(code) {
+    const promos = get('promoCodes') || [];
+    const p = promos.find(x => x.code === code.toUpperCase() && x.active && x.usesLeft > 0);
+    if (p) {
+      p.usesLeft--;
+      await updateSetting('promoCodes', promos);
+    }
+  }
+
+  /* ---- Notifications ---- */
+  function addNotification(msg, type) {
+    type = type || 'info';
+    const notifs = get('notifications') || [];
+    notifs.unshift({ id: 'n' + Date.now(), msg, type, ts: Date.now(), read: false });
+    setLocal('notifications', notifs.slice(0, 50));
+  }
+
+  return {
+    init, get, updateSetting, setLocal,
+    calcCost, checkConflict, getSlotPlayerCount,
+    getPendingLock, acquireLock, releaseLock,
+    applyPromo, addNotification,
+    generateSlots, mins, toTime, isOverlap,
+    DEFAULTS
+  };
+})();

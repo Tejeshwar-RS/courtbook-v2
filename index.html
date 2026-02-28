@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CourtBook — Book a Court</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* Slot grid */
+    .slot-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+      gap: 8px;
+      margin-top: 1rem;
+    }
+
+    .slot-btn {
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 6px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      background: var(--white);
+      color: var(--text);
+    }
+
+    .slot-btn:hover {
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    .slot-btn.slot-selected {
+      border-color: var(--accent);
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+
+    .slot-btn.slot-booked {
+      border-color: var(--booked-border);
+      background: var(--booked-bg);
+      color: var(--booked);
+      cursor: not-allowed;
+    }
+
+    .slot-btn.slot-full {
+      border-color: var(--pending-border);
+      background: var(--pending-bg);
+      color: var(--pending);
+      cursor: not-allowed;
+    }
+
+    .slot-btn.slot-event {
+      border-color: #c4b5fd;
+      background: #f5f3ff;
+      color: #7c3aed;
+      cursor: not-allowed;
+    }
+
+    .promo-row {
+      display: flex;
+      gap: 0.6rem;
+      align-items: flex-end;
+    }
+
+    .promo-row input {
+      flex: 1;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="logo">
+        <div class="logo-mark"><svg viewBox="0 0 24 24">
+            <path
+              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6l5 3-1 1.73-6-3.73V7z" />
+          </svg></div>
+        <span class="logo-text">Court<span>Book</span></span>
+      </a>
+      <div class="header-meta" id="userBar" style="display:flex;align-items:center;gap:0.75rem">
+        <span id="headerDate"></span>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-container">
+    <div id="appAlert" class="alert" style="margin-bottom:1rem"></div>
+
+    <!-- Courts Overview -->
+    <div class="section-header">
+      <div class="section-title">Courts Overview</div>
+      <span class="count-badge" id="availCount"></span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 270px;gap:1.5rem;margin-bottom:2.5rem">
+      <div class="courts-grid" id="courtsGrid" style="margin-bottom:0"></div>
+      <div class="stats-dark" style="height:fit-content">
+        <div class="stats-dark-title">Live Summary</div>
+        <div class="stat-row"><span class="stat-label">Total Courts</span><span class="stat-value stat-orange"
+            id="statTotal"></span></div>
+        <div class="stat-row"><span class="stat-label">Available Now</span><span class="stat-value stat-green"
+            id="statAvail"></span></div>
+        <div class="stat-row"><span class="stat-label">Booked Now</span><span class="stat-value stat-red"
+            id="statBooked"></span></div>
+        <div class="stat-row"><span class="stat-label">Bookings Today</span><span class="stat-value stat-orange"
+            id="statToday"></span></div>
+        <div class="stat-row"><span class="stat-label">Revenue Today</span><span class="stat-value stat-green"
+            id="statRevenue"></span></div>
+        <p class="hint-text">Click "Book This Court" on any available court card to start your booking flow.</p>
+      </div>
+    </div>
+
+    <!-- Booking Flow -->
+    <div class="section-header" style="margin-bottom:1.5rem">
+      <div class="section-title">Booking Flow</div>
+    </div>
+    <div class="steps" style="margin-bottom:1.75rem">
+      <div class="step active">
+        <div class="step-num">1</div>Select Court
+      </div>
+      <div class="step-line"></div>
+      <div class="step">
+        <div class="step-num">2</div>Date &amp; Slot
+      </div>
+      <div class="step-line"></div>
+      <div class="step">
+        <div class="step-num">3</div>Add-Ons
+      </div>
+      <div class="step-line"></div>
+      <div class="step">
+        <div class="step-num">4</div>Confirm
+      </div>
+    </div>
+
+    <!-- Step 1 -->
+    <div id="step-1" class="booking-step card card-pad">
+      <div style="color:var(--muted);font-size:0.85rem;text-align:center;padding:1rem 0">
+        Click <strong>"Book This Court"</strong> on any court card above to begin.
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div id="step-2" class="booking-step card card-pad" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+        <h3 id="stepCourtLabel" style="color:var(--accent)"></h3>
+        <button class="btn btn-secondary btn-sm" onclick="setStep(1)">Change Court</button>
+      </div>
+      <div class="form-group" style="max-width:220px;margin-bottom:1.25rem">
+        <label for="bookDate">Select Date</label>
+        <input type="date" id="bookDate">
+      </div>
+      <div class="slot-label">Available Time Slots</div>
+      <div class="slot-grid" id="slotGrid"></div>
+      <div id="playersWrap" style="margin-top:1.25rem;max-width:280px"></div>
+      <div class="cost-preview" id="costPreview" style="margin-top:1rem">
+        <div>
+          <div class="cost-preview-label">Estimated Cost</div>
+          <div class="cost-preview-sub" id="costBreakdown"></div>
+        </div>
+        <div class="cost-preview-value" id="costValue"></div>
+      </div>
+      <div style="display:flex;gap:0.75rem;margin-top:1.25rem">
+        <button class="btn btn-secondary" onclick="setStep(1)">Back</button>
+        <button class="btn btn-primary" onclick="proceedToAddOns()">Continue to Add-Ons</button>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div id="step-3" class="booking-step card card-pad" style="display:none">
+      <h3 style="margin-bottom:1.25rem">Select Add-Ons <span
+          style="font-size:0.75rem;font-weight:400;color:var(--muted)">(optional)</span></h3>
+      <div id="membershipSection">
+        <div class="slot-label" style="margin-bottom:0.75rem">Membership <span class="label-hint">Only your verified
+            tier is unlocked</span></div>
+        <div class="membership-grid" id="membershipGrid"></div>
+      </div>
+      <div id="equipmentSection" style="margin-top:1.25rem">
+        <div class="slot-label" style="margin-bottom:0.75rem">Equipment Rental</div>
+        <div class="addon-grid" id="equipmentGrid"></div>
+      </div>
+      <div id="bundleSection" style="margin-top:1.25rem">
+        <div class="slot-label" style="margin-bottom:0.75rem">Bundles</div>
+        <div class="addon-grid" id="bundleGrid"></div>
+      </div>
+      <div id="promoSection" style="margin-top:1.25rem">
+        <div class="slot-label" style="margin-bottom:0.75rem">Promo Code</div>
+        <div class="promo-row">
+          <input type="text" id="promoInput" placeholder="Enter code e.g. WELCOME10" style="text-transform:uppercase">
+          <button class="btn btn-secondary" onclick="applyPromoCode()">Apply</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:0.75rem;margin-top:1.5rem">
+        <button class="btn btn-secondary" onclick="setStep(2)">Back</button>
+        <button class="btn btn-primary" onclick="setStep(4)">Review &amp; Confirm</button>
+      </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div id="step-4" class="booking-step card card-pad" style="display:none">
+      <h3 style="margin-bottom:1.25rem">Booking Summary</h3>
+      <div class="alert alert-warn" id="lockWarning" style="margin-bottom:1rem"></div>
+      <div class="form-grid" style="margin-bottom:1.25rem">
+        <div>
+          <div class="slot-label">Court</div>
+          <div style="font-weight:600;font-size:0.9rem" id="confirmCourtName"></div>
+        </div>
+        <div>
+          <div class="slot-label">Sport</div>
+          <div style="font-weight:600;font-size:0.9rem" id="confirmSport"></div>
+        </div>
+        <div>
+          <div class="slot-label">Date</div>
+          <div style="font-family:var(--mono);font-size:0.85rem" id="confirmDate"></div>
+        </div>
+        <div>
+          <div class="slot-label">Time</div>
+          <div style="font-family:var(--mono);font-size:0.85rem" id="confirmTime"></div>
+        </div>
+        <div>
+          <div class="slot-label">Duration</div>
+          <div style="font-family:var(--mono);font-size:0.85rem" id="confirmDuration"></div>
+        </div>
+        <div>
+          <div class="slot-label">Players</div>
+          <div style="font-family:var(--mono);font-size:0.85rem" id="confirmPlayers"></div>
+        </div>
+        <div>
+          <div class="slot-label">Membership</div>
+          <div style="font-size:0.85rem" id="confirmMembership"></div>
+        </div>
+        <div>
+          <div class="slot-label">Equipment</div>
+          <div style="font-size:0.82rem" id="confirmEquip"></div>
+        </div>
+        <div>
+          <div class="slot-label">Promo Code</div>
+          <div style="font-size:0.82rem" id="confirmPromo"></div>
+        </div>
+      </div>
+      <div
+        style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1rem;margin-bottom:1.25rem">
+        <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.82rem"><span
+            style="color:var(--muted)">Base Cost</span><span class="td-mono" id="confirmBase"></span></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.82rem"><span
+            style="color:var(--muted)">Peak Surcharge</span><span class="td-mono" style="color:var(--pending)"
+            id="confirmPeak"></span></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.82rem"><span
+            style="color:var(--muted)">Member Discount</span><span class="td-mono" style="color:var(--available)"
+            id="confirmDiscount"></span></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.82rem"><span
+            style="color:var(--muted)">Equipment</span><span class="td-mono" id="confirmEquipCost"></span></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.82rem"><span
+            style="color:var(--muted)">Promo Saving</span><span class="td-mono" style="color:var(--available)"
+            id="confirmPromoSaving"></span></div>
+        <div
+          style="display:flex;justify-content:space-between;padding:8px 0 0;margin-top:6px;border-top:1px solid var(--border);font-size:1rem;font-weight:700">
+          <span>Total</span><span style="color:var(--accent);font-family:var(--mono)" id="confirmTotal"></span>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:1.25rem">
+        <label for="playerName">Your Name</label>
+        <input type="text" id="playerName" placeholder="Enter your full name">
+      </div>
+      <div style="display:flex;gap:0.75rem">
+        <button class="btn btn-secondary" onclick="setStep(3)">Back</button>
+        <button class="btn btn-primary" onclick="confirmBooking()">Confirm Booking</button>
+      </div>
+    </div>
+
+    <!-- Bookings Table -->
+    <div class="section-header" style="margin-top:2.5rem">
+      <div class="section-title">My Bookings</div>
+      <span class="count-badge" id="bookingCount"></span>
+    </div>
+    <div class="table-card">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Court</th>
+              <th>Sport</th>
+              <th>Player</th>
+              <th>Membership</th>
+              <th>Players</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Duration</th>
+              <th>Amount</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="bookingTable"></tbody>
+        </table>
+        <div class="empty-state" id="emptyState">
+          <div class="empty-state-icon">&#9632;</div>
+          <div>No bookings yet. Select a court above to get started.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Waitlist Modal -->
+  <div id="waitlistModal"
+    style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999;align-items:center;justify-content:center">
+    <div class="card card-pad" style="width:360px;max-width:90vw">
+      <h3 style="margin-bottom:0.5rem">Court Unavailable</h3>
+      <p style="margin-bottom:1.25rem">This slot is already booked. Would you like to join the waitlist?</p>
+      <div class="form-group" style="margin-bottom:1rem">
+        <label for="waitlistPlayer">Your Name</label>
+        <input type="text" id="waitlistPlayer" placeholder="Enter your name">
+      </div>
+      <div style="display:flex;gap:0.75rem">
+        <button class="btn btn-secondary" onclick="closeWaitlist()">Cancel</button>
+        <button class="btn btn-primary" onclick="joinWaitlist()">Join Waitlist</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>CourtBook — Indoor Sports Scheduling System</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    if (!Auth.requireLogin()) document.body.style.display = 'none';
+    else Auth.injectUserBar(true);
+  </script>
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+
+</html>

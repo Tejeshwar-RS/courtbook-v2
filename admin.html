@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CourtBook — Admin Dashboard</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .heatmap-row {
+      display: flex;
+      gap: 3px;
+      margin-top: 0.75rem;
+    }
+
+    .ana-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .ana-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+    }
+
+    .ana-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      font-family: var(--mono);
+      margin-top: 4px;
+    }
+
+    .ana-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .event-court-picker {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="logo">
+        <div class="logo-mark"><svg viewBox="0 0 24 24">
+            <path
+              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6l5 3-1 1.73-6-3.73V7z" />
+          </svg></div>
+        <span class="logo-text">Court<span>Book</span></span>
+      </a>
+      <div class="header-meta" id="userBar" style="display:flex;align-items:center;gap:0.75rem"></div>
+    </div>
+  </header>
+
+  <div id="globalAlert" class="alert"
+    style="position:fixed;top:70px;right:1.5rem;z-index:500;min-width:280px;max-width:380px;box-shadow:var(--shadow-lg)">
+  </div>
+
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-section-label">System</div>
+      <div class="sidebar-item active" data-mod="features" onclick="showModule('features')"> <span
+          class="sidebar-dot"></span>Feature Toggles</div>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-section-label">Configuration</div>
+      <div class="sidebar-item" data-mod="courts" onclick="showModule('courts')"> <span
+          class="sidebar-dot"></span>Courts</div>
+      <div class="sidebar-item" data-mod="timeslots" onclick="showModule('timeslots')"> <span
+          class="sidebar-dot"></span>Time Slots</div>
+      <div class="sidebar-item" data-mod="pricing" onclick="showModule('pricing')"> <span
+          class="sidebar-dot"></span>Dynamic Pricing</div>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-section-label">Products</div>
+      <div class="sidebar-item" data-mod="memberships" onclick="showModule('memberships')"> <span
+          class="sidebar-dot"></span>Memberships</div>
+      <div class="sidebar-item" data-mod="equipment" onclick="showModule('equipment')"> <span
+          class="sidebar-dot"></span>Equipment</div>
+      <div class="sidebar-item" data-mod="bundles" onclick="showModule('bundles')"> <span
+          class="sidebar-dot"></span>Bundles</div>
+      <div class="sidebar-item" data-mod="promos" onclick="showModule('promos')"> <span class="sidebar-dot"></span>Promo
+        Codes</div>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-section-label">Operations</div>
+      <div class="sidebar-item" data-mod="bookings" onclick="showModule('bookings')"> <span
+          class="sidebar-dot"></span>Bookings &amp; Waitlist</div>
+      <div class="sidebar-item" data-mod="events" onclick="showModule('events')"> <span
+          class="sidebar-dot"></span>Events &amp; Tournaments</div>
+      <div class="sidebar-item" data-mod="notifications" onclick="showModule('notifications')"><span
+          class="sidebar-dot"></span>Notifications</div>
+      <div class="sidebar-item" data-mod="analytics" onclick="showModule('analytics')"> <span
+          class="sidebar-dot"></span>Analytics</div>
+    </aside>
+
+    <main class="admin-content">
+
+      <!-- FEATURES -->
+      <div id="mod-features" class="module-panel active">
+        <div class="section-header">
+          <div class="section-title">Feature Toggles</div>
+        </div>
+        <div class="card card-pad" style="max-width:560px">
+          <p style="margin-bottom:1.25rem;color:var(--muted);font-size:0.82rem">Enable or disable modules globally.
+            Changes take effect immediately.</p>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">Dynamic Pricing</div>
+              <div class="toggle-desc">Peak hour multipliers on court rates</div>
+            </div><label class="switch"><input type="checkbox" id="feat-dynamicPricing"
+                onchange="saveFeature('dynamicPricing',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">Memberships</div>
+              <div class="toggle-desc">Verified membership discounts</div>
+            </div><label class="switch"><input type="checkbox" id="feat-memberships"
+                onchange="saveFeature('memberships',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">Equipment Rental</div>
+              <div class="toggle-desc">Gear rental options at booking</div>
+            </div><label class="switch"><input type="checkbox" id="feat-equipment"
+                onchange="saveFeature('equipment',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">Bundles</div>
+              <div class="toggle-desc">Gear package deals</div>
+            </div><label class="switch"><input type="checkbox" id="feat-bundles"
+                onchange="saveFeature('bundles',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">Waitlist</div>
+              <div class="toggle-desc">Users can join waitlist for booked slots</div>
+            </div><label class="switch"><input type="checkbox" id="feat-waitlist"
+                onchange="saveFeature('waitlist',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">Concurrency Lock</div>
+              <div class="toggle-desc">5-minute soft lock during booking</div>
+            </div><label class="switch"><input type="checkbox" id="feat-concurrencyLock"
+                onchange="saveFeature('concurrencyLock',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">Promo Codes</div>
+              <div class="toggle-desc">Discount codes at checkout</div>
+            </div><label class="switch"><input type="checkbox" id="feat-promoCodes"
+                onchange="saveFeature('promoCodes',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">Slot Capacity Control</div>
+              <div class="toggle-desc">Max players per slot enforcement</div>
+            </div><label class="switch"><input type="checkbox" id="feat-slotCapacity"
+                onchange="saveFeature('slotCapacity',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">Notifications</div>
+              <div class="toggle-desc">Booking confirmation and reminder log</div>
+            </div><label class="switch"><input type="checkbox" id="feat-notifications"
+                onchange="saveFeature('notifications',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">Events &amp; Tournaments</div>
+              <div class="toggle-desc">Multi-court batch booking for events</div>
+            </div><label class="switch"><input type="checkbox" id="feat-events"
+                onchange="saveFeature('events',this.checked)"><span class="slider"></span></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- COURTS -->
+      <div id="mod-courts" class="module-panel">
+        <div class="section-header">
+          <div class="section-title">Courts</div>
+        </div>
+        <div class="card card-pad" style="margin-bottom:1.25rem">
+          <div id="courtFormTitle" style="font-size:0.82rem;font-weight:600;margin-bottom:1rem">Add New Court</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Court Name</label><input type="text" id="courtName"
+                placeholder="e.g. Court G"></div>
+            <div class="form-group"><label>Sport <span class="label-hint">Type any sport</span></label><input
+                type="text" id="courtSport" placeholder="e.g. Pickleball, Futsal..."></div>
+            <div class="form-group"><label>Base Rate (Rs/hr)</label><input type="number" id="courtRate"
+                placeholder="250" min="200" max="450"></div>
+            <div class="form-group"><label>Max Players/Slot</label><input type="number" id="courtMax"
+                placeholder="e.g. 4" min="1"></div>
+            <div class="form-group"><label>Team Size</label><input type="number" id="courtTeam" placeholder="e.g. 2"
+                min="1"></div>
+          </div>
+          <div style="display:flex;gap:0.75rem;margin-top:1rem">
+            <button class="btn btn-primary" id="courtSaveBtn" onclick="saveCourt()">Add Court</button>
+            <button class="btn btn-secondary" id="courtCancelBtn" onclick="cancelEditCourt()"
+              style="display:none">Cancel</button>
+          </div>
+        </div>
+        <div class="table-card">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Sport</th>
+                  <th>Rate/hr</th>
+                  <th>Capacity</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="courtsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TIME SLOTS -->
+      <div id="mod-timeslots" class="module-panel">
+        <div class="section-header">
+          <div class="section-title">Time Slots</div>
+        </div>
+        <div class="card card-pad" style="margin-bottom:1.25rem;max-width:520px">
+          <div style="font-size:0.82rem;font-weight:600;margin-bottom:1rem">Operating Hours &amp; Slot Duration</div>
+          <div class="form-grid-3">
+            <div class="form-group"><label>Opening Time</label><input type="time" id="tsOpen"></div>
+            <div class="form-group"><label>Closing Time</label><input type="time" id="tsClose"></div>
+            <div class="form-group"><label>Slot Duration <span class="label-hint">minutes</span></label><input
+                type="number" id="tsDuration" placeholder="60" min="30" max="240" step="30"></div>
+          </div>
+          <div style="margin-top:1rem"><button class="btn btn-primary" onclick="saveHours()">Save &amp; Preview
+              Slots</button></div>
+          <div class="slot-list" id="slotPreview" style="margin-top:1rem;flex-wrap:wrap;gap:4px;display:flex"></div>
+        </div>
+        <div class="card card-pad" style="max-width:520px">
+          <div style="font-size:0.82rem;font-weight:600;margin-bottom:1rem">Blocked Periods</div>
+          <div class="form-grid-3">
+            <div class="form-group"><label>Label</label><input type="text" id="blockLabel" placeholder="Maintenance">
+            </div>
+            <div class="form-group"><label>Start</label><input type="time" id="blockStart"></div>
+            <div class="form-group"><label>End</label><input type="time" id="blockEnd"></div>
+          </div>
+          <div style="margin-top:1rem"><button class="btn btn-primary" onclick="addBlocked()">Add Block</button></div>
+          <div style="margin-top:1.25rem" id="blockedList"></div>
+        </div>
+      </div>
+
+      <!-- DYNAMIC PRICING -->
+      <div id="mod-pricing" class="module-panel">
+        <div class="section-header">
+          <div class="section-title">Dynamic Pricing</div>
+        </div>
+        <div class="card card-pad" style="margin-bottom:1.25rem">
+          <p style="font-size:0.78rem;color:var(--muted);margin-bottom:1rem">Multiplier of 1.5 = 50% higher than base
+            rate during that window.</p>
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:1rem">
+            <div class="form-group"><label>Label</label><input type="text" id="peakLabel" placeholder="Evening Peak">
+            </div>
+            <div class="form-group"><label>Start</label><input type="time" id="peakStart"></div>
+            <div class="form-group"><label>End</label><input type="time" id="peakEnd"></div>
+            <div class="form-group"><label>Multiplier</label><input type="number" id="peakMulti" placeholder="1.5"
+                step="0.1" min="1.1" max="3"></div>
+          </div>
+          <div style="margin-top:1rem"><button class="btn btn-primary" onclick="addPeak()">Add Rule</button></div>
+        </div>
+        <div class="card card-pad" id="peakList"></div>
+      </div>
+
+      <!-- MEMBERSHIPS -->
+      <div id="mod-memberships" class="module-panel">
+        <div class="section-header">
+          <div class="section-title">Membership Tiers</div>
+        </div>
+        <div class="card card-pad" style="margin-bottom:1.25rem">
+          <div style="font-size:0.82rem;font-weight:600;margin-bottom:1rem">Add Tier</div>
+          <div class="form-grid-3">
+            <div class="form-group"><label>Tier Name</label><input type="text" id="memName" placeholder="Gold"></div>
+            <div class="form-group"><label>Discount (%)</label><input type="number" id="memDiscount" placeholder="20"
+                min="1" max="50"></div>
+            <div class="form-group"><label>Priority</label><input type="number" id="memPriority" placeholder="2" min="0"
+                max="10"></div>
+          </div>
+          <div style="margin-top:1rem"><button class="btn btn-primary" onclick="addMembership()">Add Tier</button></div>
+        </div>
+        <div class="table-card" style="margin-bottom:1.5rem">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tier</th>
+                  <th>Discount</th>
+                  <th>Priority</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="memTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="section-header">
+          <div class="section-title">Verified Members</div>
+        </div>
+        <div class="card card-pad" style="margin-bottom:1rem">
+          <p style="font-size:0.78rem;color:var(--muted);margin-bottom:1rem">Assign a membership tier to a user by their
+            registered email. Only verified users can apply that discount.</p>
+          <div class="form-grid">
+            <div class="form-group"><label>User Email</label><input type="email" id="vmEmail"
+                placeholder="user@email.com"></div>
+            <div class="form-group"><label>Membership Tier</label>
+              <div class="select-wrap"><select id="vmMembership">
+                  <option value="">Select tier</option>
+                </select></div>
+            </div>
+          </div>
+          <div style="margin-top:1rem"><button class="btn btn-primary" onclick="assignVerifiedMember()">Assign
+              Membership</button></div>
+        </div>
+        <div class="card card-pad" id="verifiedMemberList"></div>
+      </div>
+
+      <!-- EQUIPMENT -->
+      <div id="mod-equipment" class="module-panel">
+        <div class="section-header">
+          <div class="section-title">Equipment Rental</div>
+        </div>
+        <div class="card card-pad" style="margin-bottom:1.25rem">
+          <div class="form-grid-3">
+            <div class="form-group"><label>Item Name</label><input type="text" id="equipName" placeholder="Racket">
+            </div>
+            <div class="form-group"><label>Price (Rs/session)</label><input type="number" id="equipPrice"
+                placeholder="50" min="1"></div>
+            <div class="form-group"><label>Stock</label><input type="number" id="equipStock" placeholder="10" min="0">
+            </div>
+          </div>
+          <div style="margin-top:1rem"><button class="btn btn-primary" onclick="addEquipment()">Add Equipment</button>
+          </div>
+        </div>
+        <div class="table-card">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Price</th>
+                  <th>Stock</th>
+                  <th>Unit</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="equipTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- BUNDLES -->
+      <div id="mod-bundles" class="module-panel">
+        <div class="section-header">
+          <div class="section-title">Bundles</div>
+        </div>
+        <div class="card card-pad" style="margin-bottom:1.25rem">
+          <div class="form-grid-3">
+            <div class="form-group"><label>Bundle Name</label><input type="text" id="bundleName" placeholder="Pro Kit">
+            </div>
+            <div class="form-group"><label>Total Price (Rs)</label><input type="number" id="bundlePrice"
+                placeholder="150" min="0"></div>
+            <div class="form-group"><label>Discount (%)</label><input type="number" id="bundleDiscount" placeholder="10"
+                min="0" max="50"></div>
+          </div>
+          <div style="margin-top:1rem"><button class="btn btn-primary" onclick="addBundle()">Add Bundle</button></div>
+        </div>
+        <div class="table-card">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Bundle</th>
+                  <th>Items</th>
+                  <th>Price</th>
+                  <th>Discount</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="bundleTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROMO CODES -->
+      <div id="mod-promos" class="module-panel">
+        <div class="section-header">
+          <div class="section-title">Promo Codes</div>
+        </div>
+        <div class="card card-pad" style="margin-bottom:1.25rem">
+          <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:1rem">
+            <div class="form-group"><label>Code</label><input type="text" id="promoCode" placeholder="SUMMER20"
+                style="text-transform:uppercase"></div>
+            <div class="form-group"><label>Type</label>
+              <div class="select-wrap"><select id="promoType">
+                  <option value="percent">Percentage (%)</option>
+                  <option value="fixed">Fixed (Rs)</option>
+                </select></div>
+            </div>
+            <div class="form-group"><label>Value</label><input type="number" id="promoValue" placeholder="10" min="1">
+            </div>
+            <div class="form-group"><label>Max Uses</label><input type="number" id="promoUses" placeholder="100"
+                min="1"></div>
+          </div>
+          <div style="margin-top:1rem"><button class="btn btn-primary" onclick="addPromo()">Create Code</button></div>
+        </div>
+        <div class="table-card">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Discount</th>
+                  <th>Uses Left</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="promoTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOOKINGS -->
+      <div id="mod-bookings" class="module-panel">
+        <div class="section-header">
+          <div class="section-title">Active Bookings</div><span class="count-badge" id="adminBookingCount"></span>
+        </div>
+        <div class="table-card" style="margin-bottom:1.75rem">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Court</th>
+                  <th>Player</th>
+                  <th>Membership</th>
+                  <th>Players</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="adminBookingsBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="section-header">
+          <div class="section-title">Waitlist</div><span class="count-badge" id="waitlistCount"></span>
+        </div>
+        <div class="table-card">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Court</th>
+                  <th>Player</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="waitlistBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- EVENTS & TOURNAMENTS -->
+      <div id="mod-events" class="module-panel">
+        <div class="section-header">
+          <div class="section-title">Events &amp; Tournaments</div>
+        </div>
+        <div class="card card-pad" style="margin-bottom:1.25rem">
+          <p style="font-size:0.78rem;color:var(--muted);margin-bottom:1rem">Block one or more courts for an event.
+            Selected courts will show as unavailable on the user portal for that date and time range.</p>
+          <div class="form-grid">
+            <div class="form-group"><label>Event Name</label><input type="text" id="eventName"
+                placeholder="Annual Badminton Championship"></div>
+            <div class="form-group"><label>Type</label>
+              <div class="select-wrap"><select id="eventType">
+                  <option value="Tournament">Tournament</option>
+                  <option value="League">League</option>
+                  <option value="Practice">Practice Session</option>
+                  <option value="Private">Private Event</option>
+                </select></div>
+            </div>
+            <div class="form-group"><label>Date</label><input type="date" id="eventDate"></div>
+            <div class="form-group"></div>
+            <div class="form-group"><label>Start Time</label><input type="time" id="eventStart"></div>
+            <div class="form-group"><label>End Time</label><input type="time" id="eventEnd"></div>
+            <div class="form-group full">
+              <label>Select Courts to Block</label>
+              <div class="event-court-picker" id="eventCourtPicker"></div>
+            </div>
+          </div>
+          <div style="margin-top:1rem"><button class="btn btn-primary" onclick="addEvent()">Schedule Event</button>
+          </div>
+        </div>
+        <div class="table-card">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Courts</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Type</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="eventTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div id="mod-notifications" class="module-panel">
+        <div class="section-header">
+          <div class="section-title">Notification Log</div>
+          <div style="display:flex;align-items:center;gap:0.75rem">
+            <span class="count-badge" id="notifCount"></span>
+            <button class="btn btn-sm btn-danger" onclick="clearAllNotifs()">Clear All</button>
+          </div>
+        </div>
+        <div class="card card-pad" id="notifList"></div>
+      </div>
+
+      <!-- ANALYTICS -->
+      <div id="mod-analytics" class="module-panel">
+        <div class="section-header">
+          <div class="section-title">Analytics</div>
+        </div>
+        <div class="ana-grid">
+          <div class="ana-card">
+            <div class="ana-label">Total Revenue</div>
+            <div class="ana-value" id="anaTotalRevenue">—</div>
+          </div>
+          <div class="ana-card">
+            <div class="ana-label">Total Bookings</div>
+            <div class="ana-value" id="anaTotalBookings">—</div>
+          </div>
+          <div class="ana-card">
+            <div class="ana-label">Avg Booking Value</div>
+            <div class="ana-value" id="anaAvgValue">—</div>
+          </div>
+          <div class="ana-card">
+            <div class="ana-label">Busiest Hour</div>
+            <div class="ana-value" style="font-size:1rem" id="anaPeakHour">—</div>
+          </div>
+        </div>
+        <div class="card card-pad" style="margin-bottom:1.25rem">
+          <div style="font-size:0.82rem;font-weight:600;margin-bottom:1rem">Court Revenue &amp; Popularity</div>
+          <div id="courtPopularityBars"></div>
+        </div>
+        <div class="card card-pad" style="margin-bottom:1.25rem">
+          <div style="font-size:0.82rem;font-weight:600;margin-bottom:0.5rem">Hourly Crowd Heatmap</div>
+          <div style="font-size:0.72rem;color:var(--muted);margin-bottom:0.75rem">Hover over bars to see booking count
+            per hour</div>
+          <div class="heatmap-row" id="hourHeatmap"></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--muted);margin-top:4px">
+            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span></div>
+        </div>
+        <div class="card card-pad">
+          <div style="font-size:0.82rem;font-weight:600;margin-bottom:0.75rem">Membership Breakdown</div>
+          <div id="anaMemberBreakdown"></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <footer>CourtBook Admin Dashboard &bull; <a href="index.html" style="color:var(--accent);text-decoration:none">User
+      Portal</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    if (!Auth.requireAdmin()) { document.body.style.display = 'none'; }
+    else {
+      const s = Auth.get();
+      document.getElementById('userBar').innerHTML = `
+      <span style="font-size:0.78rem;color:#a3a3a3">${s?.user?.email || ''}</span>
+      <span class="badge badge-accent">Admin</span>
+      <a href="index.html" class="header-nav-link">User Portal</a>
+      <button class="header-nav-link" onclick="Auth.logout()" style="cursor:pointer;background:none;border:1px solid #444;color:#a3a3a3">Sign Out</button>`;
+    }
+  </script>
+  <script src="js/store.js"></script>
+  <script src="js/admin.js"></script>
+  <script>
+    // Populate membership select in verified members form dynamically
+    function refreshMemSelect() {
+      const mems = (Store.get('memberships') || []).filter(m => m.id !== 'none');
+      const sel = document.getElementById('vmMembership');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">Select tier</option>' + mems.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+    }
+    // Patch showModule to also refresh mem select
+    const _origShow = showModule;
+    window.showModule = function (id) { _origShow(id); if (id === 'memberships') refreshMemSelect(); };
+  </script>
+</body>
+
+</html>

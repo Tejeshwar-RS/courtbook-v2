@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CourtBook — Sign In</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body {
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .login-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .login-shell {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      max-width: 860px;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+    }
+
+    @media (max-width: 640px) {
+      .login-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .login-brand {
+        display: none;
+      }
+    }
+
+    /* ---- Brand panel ---- */
+    .login-brand {
+      background: linear-gradient(155deg, #1a1a1a 0%, #2d2d2d 60%, #3a1a0e 100%);
+      padding: 3rem 2.5rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .login-brand::before {
+      content: '';
+      position: absolute;
+      bottom: -60px;
+      right: -60px;
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle, rgba(239, 72, 35, 0.18) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+
+    .login-brand::after {
+      content: '';
+      position: absolute;
+      top: -40px;
+      left: -40px;
+      width: 160px;
+      height: 160px;
+      background: radial-gradient(circle, rgba(214, 208, 213, 0.08) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 1;
+    }
+
+    .brand-logo-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, var(--grad-start), var(--grad-end));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand-logo-mark svg {
+      width: 20px;
+      height: 20px;
+      fill: white;
+    }
+
+    .brand-logo-text {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: white;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-logo-text span {
+      color: var(--accent);
+    }
+
+    .brand-body {
+      z-index: 1;
+    }
+
+    .brand-tagline {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: white;
+      line-height: 1.35;
+      margin-bottom: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-tagline span {
+      color: var(--accent);
+    }
+
+    .brand-desc {
+      font-size: 0.82rem;
+      color: #7a7a7a;
+      line-height: 1.6;
+    }
+
+    .brand-features {
+      margin-top: 1.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .brand-feature {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: #9a9a9a;
+    }
+
+    .brand-feature::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .brand-footer {
+      font-size: 0.7rem;
+      color: #4a4a4a;
+      z-index: 1;
+      font-family: var(--mono);
+    }
+
+    /* ---- Form panel ---- */
+    .login-form-panel {
+      background: var(--white);
+      padding: 2.5rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .form-panel-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.35rem;
+    }
+
+    .form-panel-sub {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+
+    /* Tabs */
+    .auth-tabs {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 3px;
+      margin-bottom: 1.75rem;
+      background: var(--surface);
+    }
+
+    .auth-tab {
+      flex: 1;
+      padding: 7px;
+      text-align: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      border-radius: 5px;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all 0.2s;
+    }
+
+    .auth-tab.active {
+      background: var(--white);
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* Role selector */
+    .role-selector {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .role-card {
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.85rem 0.75rem;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .role-card:hover {
+      border-color: var(--accent-border);
+      background: var(--accent-light);
+    }
+
+    .role-card.selected {
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    .role-card-name {
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+
+    .role-card-desc {
+      font-size: 0.7rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    /* Error */
+    .auth-error {
+      padding: 9px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-bottom: 1rem;
+      display: none;
+    }
+
+    .auth-error.show {
+      display: block;
+      background: var(--booked-bg);
+      color: var(--booked);
+      border: 1px solid var(--booked-border);
+    }
+
+    .auth-success {
+      padding: 9px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-bottom: 1rem;
+      display: none;
+    }
+
+    .auth-success.show {
+      display: block;
+      background: var(--available-bg);
+      color: var(--available);
+      border: 1px solid var(--available-border);
+    }
+
+    .input-group {
+      position: relative;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding-right: 2.5rem;
+      box-sizing: border-box;
+    }
+
+    .input-eye {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 0.75rem;
+      user-select: none;
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .divider span {
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .btn-spinner {
+      display: none;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    .btn-spinner.show {
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .note {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 1rem;
+      line-height: 1.5;
+      padding: 8px 10px;
+      background: var(--surface);
+      border-radius: 5px;
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-mark">
+          <svg viewBox="0 0 24 24">
+            <path
+              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6l5 3-1 1.73-6-3.73V7z" />
+          </svg>
+        </div>
+        <span class="logo-text">Court<span>Book</span></span>
+      </div>
+      <span class="header-meta">Indoor Sports Scheduling System</span>
+    </div>
+  </header>
+
+  <div class="login-wrap">
+    <div class="login-shell">
+
+      <!-- Brand -->
+      <div class="login-brand">
+        <div class="brand-logo">
+          <div class="brand-logo-mark">
+            <svg viewBox="0 0 24 24">
+              <path
+                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6l5 3-1 1.73-6-3.73V7z" />
+            </svg>
+          </div>
+          <span class="brand-logo-text">Court<span>Book</span></span>
+        </div>
+        <div class="brand-body">
+          <div class="brand-tagline">Manage your courts.<br>Book your <span>game.</span></div>
+          <div class="brand-desc">A complete scheduling system for indoor sports facilities. Real-time availability,
+            dynamic pricing, memberships and more.</div>
+          <div class="brand-features">
+            <div class="brand-feature">Multi-court availability and booking</div>
+            <div class="brand-feature">Dynamic peak-hour pricing</div>
+            <div class="brand-feature">Membership tiers and discounts</div>
+            <div class="brand-feature">Equipment rental management</div>
+            <div class="brand-feature">Waitlist and concurrency control</div>
+          </div>
+        </div>
+        <div class="brand-footer">CourtBook v2.0 — Powered by Supabase</div>
+      </div>
+
+      <!-- Form -->
+      <div class="login-form-panel">
+        <div class="form-panel-title">Welcome back</div>
+        <div class="form-panel-sub">Sign in to your account to continue</div>
+
+        <!-- Tabs -->
+        <div class="auth-tabs">
+          <div class="auth-tab active" id="tabSignIn" onclick="switchTab('signin')">Sign In</div>
+          <div class="auth-tab" id="tabSignUp" onclick="switchTab('signup')">Create Account</div>
+        </div>
+
+        <div id="authError" class="auth-error"></div>
+        <div id="authSuccess" class="auth-success"></div>
+
+        <!-- ===== SIGN IN ===== -->
+        <div id="formSignIn">
+          <div class="form-group" style="margin-bottom:1rem">
+            <label for="siEmail">Email</label>
+            <input type="email" id="siEmail" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <div class="form-group" style="margin-bottom:1.5rem">
+            <label for="siPassword">Password</label>
+            <div class="input-group">
+              <input type="password" id="siPassword" placeholder="Enter password" autocomplete="current-password"
+                onkeydown="if(event.key==='Enter')doSignIn()">
+              <span class="input-eye" onclick="togglePw('siPassword', this)">Show</span>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-full" id="signInBtn" onclick="doSignIn()">
+            <span class="btn-spinner" id="siSpinner"></span>
+            <span id="siLabel">Sign In</span>
+          </button>
+          <div class="note" style="margin-top:1rem">Admins will be redirected to the Admin Dashboard. Users will be sent
+            to the booking portal.</div>
+        </div>
+
+        <!-- ===== SIGN UP ===== -->
+        <div id="formSignUp" style="display:none">
+          <div style="margin-bottom:1.25rem">
+            <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:0.5rem">Account Type</label>
+            <div class="role-selector">
+              <div class="role-card selected" id="roleUser" onclick="selectRole('user')">
+                <div class="role-card-name">User</div>
+                <div class="role-card-desc">Book courts, manage your sessions</div>
+              </div>
+              <div class="role-card" id="roleAdmin" onclick="selectRole('admin')">
+                <div class="role-card-name">Admin</div>
+                <div class="role-card-desc">Full system management access</div>
+              </div>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:1rem">
+            <label for="suEmail">Email</label>
+            <input type="email" id="suEmail" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <div class="form-group" style="margin-bottom:1rem">
+            <label for="suPassword">Password <span class="label-hint">min 6 characters</span></label>
+            <div class="input-group">
+              <input type="password" id="suPassword" placeholder="Create password" autocomplete="new-password">
+              <span class="input-eye" onclick="togglePw('suPassword', this)">Show</span>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:1.5rem">
+            <label for="suConfirm">Confirm Password</label>
+            <div class="input-group">
+              <input type="password" id="suConfirm" placeholder="Repeat password" autocomplete="new-password"
+                onkeydown="if(event.key==='Enter')doSignUp()">
+              <span class="input-eye" onclick="togglePw('suConfirm', this)">Show</span>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-full" id="signUpBtn" onclick="doSignUp()">
+            <span class="btn-spinner" id="suSpinner"></span>
+            <span id="suLabel">Create Account</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <footer>CourtBook — Indoor Sports Scheduling System</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    // Redirect if already logged in
+    (() => {
+      const s = Auth.get();
+      if (s) window.location.href = s.role === 'admin' ? 'admin.html' : 'index.html';
+    })();
+
+    let selectedRole = 'user';
+
+    function switchTab(tab) {
+      const isSignIn = tab === 'signin';
+      document.getElementById('tabSignIn').classList.toggle('active', isSignIn);
+      document.getElementById('tabSignUp').classList.toggle('active', !isSignIn);
+      document.getElementById('formSignIn').style.display = isSignIn ? 'block' : 'none';
+      document.getElementById('formSignUp').style.display = isSignIn ? 'none' : 'block';
+      clearMessages();
+    }
+
+    function selectRole(role) {
+      selectedRole = role;
+      document.getElementById('roleUser').classList.toggle('selected', role === 'user');
+      document.getElementById('roleAdmin').classList.toggle('selected', role === 'admin');
+    }
+
+    function togglePw(id, el) {
+      const inp = document.getElementById(id);
+      const show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      el.textContent = show ? 'Hide' : 'Show';
+    }
+
+    function setLoading(prefix, on) {
+      document.getElementById(prefix + 'Spinner').classList.toggle('show', on);
+      document.getElementById(prefix + 'Label').textContent = on ? (prefix === 'si' ? 'Signing in...' : 'Creating account...') : (prefix === 'si' ? 'Sign In' : 'Create Account');
+      document.getElementById(prefix === 'si' ? 'signInBtn' : 'signUpBtn').disabled = on;
+    }
+
+    function showErr(msg) { const e = document.getElementById('authError'); e.textContent = msg; e.classList.add('show'); }
+    function showOk(msg) { const e = document.getElementById('authSuccess'); e.textContent = msg; e.classList.add('show'); }
+    function clearMessages() { document.getElementById('authError').classList.remove('show'); document.getElementById('authSuccess').classList.remove('show'); }
+
+    async function doSignIn() {
+      clearMessages();
+      const email = document.getElementById('siEmail').value.trim();
+      const password = document.getElementById('siPassword').value;
+      if (!email || !password) return showErr('Please enter your email and password.');
+      setLoading('si', true);
+      try {
+        const role = await Auth.login(email, password);
+        showOk('Signed in. Redirecting...');
+        setTimeout(() => { window.location.href = role === 'admin' ? 'admin.html' : 'index.html'; }, 800);
+      } catch (e) {
+        showErr(e.message || 'Sign in failed. Check your credentials.');
+        setLoading('si', false);
+      }
+    }
+
+    async function doSignUp() {
+      clearMessages();
+      const email = document.getElementById('suEmail').value.trim();
+      const pw = document.getElementById('suPassword').value;
+      const pw2 = document.getElementById('suConfirm').value;
+      if (!email || !pw) return showErr('Please fill in all fields.');
+      if (pw.length < 6) return showErr('Password must be at least 6 characters.');
+      if (pw !== pw2) return showErr('Passwords do not match.');
+      setLoading('su', true);
+      try {
+        await Auth.register(email, pw, selectedRole);
+        showOk('Account created. Please check your email to confirm, then sign in.');
+        setLoading('su', false);
+        setTimeout(() => switchTab('signin'), 2000);
+      } catch (e) {
+        showErr(e.message || 'Registration failed.');
+        setLoading('su', false);
+      }
+    }
+  </script>
+</body>
+
+</html>

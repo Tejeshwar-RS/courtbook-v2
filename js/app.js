@@ -1,0 +1,409 @@
+/* js/app.js — User Portal */
+const today = new Date();
+const todayStr = today.toISOString().split('T')[0];
+let step = 1;
+let selection = { courtId: null, date: todayStr, start: '', end: '', membership: 'none', equipment: [], bundle: null, players: 1, promoCode: '' };
+
+document.getElementById('headerDate').textContent = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+document.getElementById('bookDate').value = todayStr;
+document.getElementById('bookDate').min = todayStr;
+
+/* ---- STEPS ---- */
+function setStep(n) {
+  step = n;
+  document.querySelectorAll('.booking-step').forEach(el => el.style.display = 'none');
+  const t = document.getElementById('step-' + n); if (t) t.style.display = 'block';
+  document.querySelectorAll('.step').forEach((el, i) => {
+    el.classList.toggle('active', i + 1 === n); el.classList.toggle('done', i + 1 < n);
+  });
+  if (n === 1) renderCourts();
+  if (n === 2) renderDateTimeStep();
+  if (n === 3) renderAddOns();
+  if (n === 4) renderConfirm();
+}
+
+/* ---- COURTS (fix 1) ---- */
+function renderCourts() {
+  const courts = (Store.get('courts') || []).filter(c => c.active); // only active courts shown
+  const bookings = Store.get('bookings') || [];
+  const features = Store.get('features') || Store.DEFAULTS.features;
+  const avail = courts.filter(c => !isCurrentlyBusy(c.id, bookings)).length;
+  document.getElementById('availCount').textContent = `${avail} of ${courts.length} available`;
+
+  document.getElementById('courtsGrid').innerHTML = courts.map(c => {
+    const busy = isCurrentlyBusy(c.id, bookings);
+    const todaySlots = bookings.filter(b => b.courtId == c.id && b.date === todayStr && b.status !== 'cancelled');
+    const slotHTML = todaySlots.length
+      ? todaySlots.map(b => `<span class="slot-chip${b.isEvent ? ' pending' : ''}">${b.start}–${b.end}${b.isEvent ? ' [Event]' : ''}</span>`).join('')
+      : '<span class="no-slots">No bookings today</span>';
+    const capacityNote = c.maxPlayers ? `<span style="font-size:0.7rem;color:var(--muted)">Max ${c.maxPlayers} players · Team of ${c.teamSize || 1}</span>` : '';
+    return `<div class="card card-pad card-accent-top court-card">
+      <div class="court-card-top">
+        <div><div class="court-name">${c.name}</div><div class="court-sport">${c.sport}</div></div>
+        <span class="badge ${busy ? 'badge-booked' : 'badge-available'}">${busy ? 'Booked' : 'Available'}</span>
+      </div>
+      <div class="court-rate-row">
+        <span class="court-rate-label">Base Rate</span>
+        <span class="court-rate-value">Rs.${c.baseRate}/hr ${features.dynamicPricing ? '<span class="peak-badge" style="margin-left:4px">Peak rates apply</span>' : ''}</span>
+      </div>
+      ${capacityNote ? `<div style="margin:6px 0">${capacityNote}</div>` : ''}
+      <div class="slot-label" style="margin-top:0.75rem">Today's Slots</div>
+      <div class="slot-list">${slotHTML}</div>
+      <button class="btn btn-grad btn-full" style="margin-top:1rem" onclick="selectCourt(${c.id})" ${busy && todaySlots.every(b => b.isEvent) ? 'disabled' : ''}>Book This Court</button>
+    </div>`;
+  }).join('') || '<div class="empty-state" style="grid-column:1/-1">No courts available at this time.</div>';
+
+  renderSummaryStats(courts, bookings);
+}
+
+function isCurrentlyBusy(courtId, bookings) {
+  const now = today.getHours() * 60 + today.getMinutes();
+  return bookings.some(b => b.courtId == courtId && b.date === todayStr && b.status !== 'cancelled' && Store.mins(b.start) <= now && now < Store.mins(b.end));
+}
+
+function renderSummaryStats(courts, bookings) {
+  const tb = bookings.filter(b => b.date === todayStr && b.status !== 'cancelled');
+  const busy = courts.filter(c => isCurrentlyBusy(c.id, bookings)).length;
+  document.getElementById('statTotal').textContent = courts.length;
+  document.getElementById('statAvail').textContent = courts.length - busy;
+  document.getElementById('statBooked').textContent = busy;
+  document.getElementById('statToday').textContent = tb.length;
+  document.getElementById('statRevenue').textContent = `Rs.${tb.reduce((s, b) => s + (b.cost || 0), 0)}`;
+}
+
+function selectCourt(id) { selection.courtId = id; setStep(2); }
+
+/* ---- STEP 2: DATE & TIME (fix 3 — slot grid, fix 6 — players, fix 8 — capacity) ---- */
+function renderDateTimeStep() {
+  const courts = Store.get('courts') || [], court = courts.find(c => c.id === selection.courtId);
+  if (!court || !court.active) {
+    showAppAlert('error', 'This court is no longer active.');
+    return setStep(1);
+  }
+  document.getElementById('stepCourtLabel').textContent = `${court.name} — ${court.sport}`;
+  document.getElementById('bookDate').value = selection.date;
+  renderSlotGrid();
+}
+
+function renderSlotGrid() {
+  const date = document.getElementById('bookDate').value || todayStr;
+  selection.date = date;
+  const slots = Store.generateSlots();
+  const bookings = Store.get('bookings') || [];
+  const court = (Store.get('courts') || []).find(c => c.id === selection.courtId);
+  const features = Store.get('features') || Store.DEFAULTS.features;
+  const grid = document.getElementById('slotGrid');
+
+  if (!slots.length) { grid.innerHTML = '<div class="empty-state">No slots configured. Ask admin to set up time slots.</div>'; return; }
+
+  grid.innerHTML = slots.map(s => {
+    const conflict = Store.checkConflict(selection.courtId, date, s.start, s.end);
+    const playerCount = Store.getSlotPlayerCount(selection.courtId, date, s.start, s.end);
+    const maxP = court?.maxPlayers || 0;
+    const full = features.slotCapacity && maxP > 0 && playerCount >= maxP;
+    const isEvent = (bookings.find(b => b.courtId == selection.courtId && b.date === date && b.start === s.start && b.isEvent));
+    const sel = selection.start === s.start && selection.end === s.end;
+    let cls = 'slot-btn', state = 'available';
+    if (isEvent) { cls += ' slot-event'; state = 'event'; }
+    else if (full) { cls += ' slot-full'; state = 'full'; }
+    else if (conflict) { cls += ' slot-booked'; state = 'booked'; }
+    else if (sel) { cls += ' slot-selected'; }
+    const label = state === 'event' ? 'Event' : state === 'full' ? 'Full' : state === 'booked' ? 'Booked' : 'Available';
+    return `<div class="${cls}" onclick="${(state === 'available' || sel) ? `selectSlot('${s.start}','${s.end}')` : ''}" title="${s.start}–${s.end}: ${label}${maxP ? ` (${playerCount}/${maxP} players)` : ''}">
+      <div style="font-size:0.78rem;font-weight:600;font-family:var(--mono)">${s.start}</div>
+      <div style="font-size:0.68rem;color:inherit;margin-top:2px">${label}</div>
+      ${maxP && state === 'available' ? `<div style="font-size:0.6rem;opacity:0.7">${playerCount}/${maxP}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Players input
+  const maxP = court?.maxPlayers || 99, teamSize = court?.teamSize || 1;
+  document.getElementById('playersWrap').innerHTML = `
+    <div class="form-group">
+      <label for="playerCount">Number of Players <span class="label-hint">Max ${maxP}, team of ${teamSize}</span></label>
+      <input type="number" id="playerCount" min="1" max="${maxP}" value="${selection.players}" onchange="selection.players=Math.min(${maxP},Math.max(1,parseInt(this.value)||1));updateCostPreview()">
+    </div>`;
+
+  updateCostPreview();
+}
+
+function selectSlot(start, end) {
+  selection.start = start; selection.end = end;
+  renderSlotGrid(); updateCostPreview();
+}
+
+document.getElementById('bookDate').addEventListener('change', () => renderSlotGrid());
+
+function updateCostPreview() {
+  const preview = document.getElementById('costPreview');
+  if (!selection.start || !selection.end) { preview.classList.remove('show'); return; }
+  const cost = Store.calcCost(selection.courtId, selection.start, selection.end, selection.membership, selection.equipment, selection.promoCode, selection.players);
+  document.getElementById('costValue').textContent = `Rs.${cost.total}`;
+  document.getElementById('costBreakdown').textContent = `${(cost.durMins / 60).toFixed(1)}hr · ${selection.players} player(s)`;
+  preview.classList.add('show');
+}
+
+function proceedToAddOns() {
+  if (!selection.start || !selection.end) return showAppAlert('error', 'Select a time slot first.');
+  const court = (Store.get('courts') || []).find(c => c.id === selection.courtId);
+  if (!court || !court.active) { showAppAlert('error', 'This court is no longer active.'); return setStep(1); }
+  const maxP = court?.maxPlayers || 99;
+  if (selection.players < 1 || selection.players > maxP) return showAppAlert('error', `Players must be between 1 and ${maxP}.`);
+  if (Store.checkConflict(selection.courtId, selection.date, selection.start, selection.end)) {
+    if ((Store.get('features') || {}).waitlist) document.getElementById('waitlistModal').style.display = 'flex';
+    else showAppAlert('error', 'This slot is already booked.');
+    return;
+  }
+  setStep(3);
+}
+
+/* ---- WAITLIST ---- */
+function joinWaitlist() {
+  const player = document.getElementById('waitlistPlayer').value.trim(); if (!player) return;
+  const court = (Store.get('courts') || []).find(c => c.id === selection.courtId), wl = Store.get('waitlist') || [];
+  wl.push({ courtId: selection.courtId, courtName: court.name, player, date: selection.date, start: selection.start, end: selection.end, ts: Date.now() });
+  Store.set('waitlist', wl); closeWaitlist();
+  showAppAlert('warn', `${player} added to waitlist for ${court.name}.`);
+}
+function closeWaitlist() { document.getElementById('waitlistModal').style.display = 'none'; document.getElementById('waitlistPlayer').value = ''; }
+
+/* ---- STEP 3: ADD-ONS (fix 4 membership verify, fix 7 promo) ---- */
+function renderAddOns() {
+  const courts = Store.get('courts') || [], court = courts.find(c => c.id === selection.courtId);
+  if (!court || !court.active) { showAppAlert('error', 'This court is no longer active.'); return setStep(1); }
+  const features = Store.get('features') || Store.DEFAULTS.features;
+  const memberships = Store.get('memberships') || Store.DEFAULTS.memberships;
+  const equipment = Store.get('equipment') || [];
+  const bundles = Store.get('bundles') || [];
+  const session = Auth.get();
+  const userEmail = session?.user?.email || '';
+  const verified = Store.get('verifiedMembers') || [];
+  const userVerifiedMem = verified.find(v => v.email === userEmail);
+
+  // Memberships — only show if user has verified membership or 'none'
+  document.getElementById('membershipSection').style.display = features.memberships ? 'block' : 'none';
+  document.getElementById('membershipGrid').innerHTML = memberships.map(m => {
+    const isVerified = m.id === 'none' || (userVerifiedMem && userVerifiedMem.membershipId === m.id);
+    const locked = !isVerified;
+    return `<div class="membership-card ${selection.membership === m.id ? 'selected' : ''} ${m.id === 'none' ? 'none' : ''} ${locked ? 'mem-locked' : ''}"
+      onclick="${locked ? '' : ''}" ${locked ? '' : ''}
+      style="${locked ? 'opacity:0.45;cursor:not-allowed;' : ''}"
+      ${!locked ? `onclick="selectMembership('${m.id}')"` : ''}>
+      <div class="mem-name">${m.name}</div>
+      <div class="mem-discount">${m.discount > 0 ? (m.discount * 100).toFixed(0) + '% off' : 'Standard rate'}</div>
+      <div class="mem-priority">${locked ? '<span style="color:var(--booked);font-size:0.65rem">Not verified</span>' : m.priority > 0 ? 'Priority ' + m.priority : 'No priority'}</div>
+    </div>`;
+  }).join('');
+
+  // Equipment
+  document.getElementById('equipmentSection').style.display = features.equipment ? 'block' : 'none';
+  document.getElementById('equipmentGrid').innerHTML = equipment.map(e => `
+    <div class="addon-card ${selection.equipment.includes(e.id) ? 'selected' : ''}" onclick="toggleEquip('${e.id}')">
+      <div><div class="addon-name">${e.name}</div><div class="addon-stock">${e.stock} in stock</div></div>
+      <div style="text-align:right">
+        <div class="addon-price">+Rs.${e.price}</div>
+        <div class="addon-checkbox">${selection.equipment.includes(e.id) ? '&#10003;' : ''}</div>
+      </div>
+    </div>`).join('');
+
+  // Bundles
+  document.getElementById('bundleSection').style.display = features.bundles ? 'block' : 'none';
+  document.getElementById('bundleGrid').innerHTML = [{ id: null, name: 'No Bundle', price: 0, discount: 0 }, ...bundles].map(b => `
+    <div class="addon-card ${selection.bundle === b.id ? 'selected' : ''}" onclick="selectBundle(${JSON.stringify(b.id)})">
+      <div><div class="addon-name">${b.name}</div><div class="addon-stock">${b.discount ? b.discount + '% off items' : 'No extras'}</div></div>
+      <div style="text-align:right">
+        <div class="addon-price">${b.price ? '+Rs.' + b.price : 'Rs.0'}</div>
+        <div class="addon-checkbox">${selection.bundle === b.id ? '&#10003;' : ''}</div>
+      </div>
+    </div>`).join('');
+
+  // Promo code
+  document.getElementById('promoSection').style.display = features.promoCodes ? 'block' : 'none';
+}
+
+function selectMembership(id) { selection.membership = id; renderAddOns(); updateCostPreview(); }
+function toggleEquip(id) { const i = selection.equipment.indexOf(id); i > -1 ? selection.equipment.splice(i, 1) : selection.equipment.push(id); renderAddOns(); updateCostPreview(); }
+function selectBundle(id) { selection.bundle = id; renderAddOns(); updateCostPreview(); }
+function applyPromoCode() {
+  const code = document.getElementById('promoInput').value.trim().toUpperCase();
+  const promos = Store.get('promoCodes') || [], p = promos.find(x => x.code === code && x.active && x.usesLeft > 0);
+  if (!p) return showAppAlert('error', 'Invalid or expired promo code.');
+  selection.promoCode = code; updateCostPreview();
+  showAppAlert('success', `Promo "${code}" applied — ${p.type === 'percent' ? p.value + '%' : 'Rs.' + p.value} off.`);
+}
+
+/* ---- STEP 4: CONFIRM ---- */
+function renderConfirm() {
+  const courts = Store.get('courts') || [], court = courts.find(c => c.id === selection.courtId);
+  if (!court || !court.active) { showAppAlert('error', 'This court is no longer active.'); return setStep(1); }
+  const equip = Store.get('equipment') || [], mems = Store.get('memberships') || Store.DEFAULTS.memberships;
+  const mem = mems.find(m => m.id === selection.membership);
+  const cost = Store.calcCost(selection.courtId, selection.start, selection.end, selection.membership, selection.equipment, selection.promoCode, selection.players);
+  const features = Store.get('features') || Store.DEFAULTS.features;
+
+  document.getElementById('confirmCourtName').textContent = court?.name || '';
+  document.getElementById('confirmSport').textContent = court?.sport || '';
+  document.getElementById('confirmDate').textContent = selection.date;
+  document.getElementById('confirmTime').textContent = `${selection.start} – ${selection.end}`;
+  document.getElementById('confirmPlayers').textContent = `${selection.players} player(s)`;
+  document.getElementById('confirmMembership').textContent = mem?.name || 'None';
+  document.getElementById('confirmDuration').textContent = `${(cost.durMins / 60).toFixed(1)} hrs`;
+  document.getElementById('confirmBase').textContent = `Rs.${cost.base}`;
+  document.getElementById('confirmPeak').textContent = cost.peakSurcharge ? `+Rs.${cost.peakSurcharge}` : 'None';
+  document.getElementById('confirmDiscount').textContent = cost.memberSaving ? `-Rs.${cost.memberSaving}` : 'None';
+  document.getElementById('confirmEquip').textContent = selection.equipment.length
+    ? selection.equipment.map(id => equip.find(e => e.id === id)?.name || id).join(', ') + ` (+Rs.${cost.equipCost})` : 'None';
+  document.getElementById('confirmPromo').textContent = selection.promoCode && cost.promoSaving ? `${selection.promoCode} (-Rs.${cost.promoSaving})` : 'None';
+  document.getElementById('confirmTotal').textContent = `Rs.${cost.total}`;
+
+  const lock = features.concurrencyLock ? Store.getPendingLock(selection.courtId, selection.date, selection.start, selection.end) : null;
+  const lw = document.getElementById('lockWarning');
+  if (lock) { lw.textContent = `Slot pending by another user until ${new Date(lock.expires).toLocaleTimeString()}.`; lw.classList.add('show'); }
+  else lw.classList.remove('show');
+}
+
+/* ---- CONFIRM BOOKING ---- */
+async function confirmBooking() {
+  const courts = Store.get('courts') || [], court = courts.find(c => c.id === selection.courtId);
+  if (!court || !court.active) { showAppAlert('error', 'This court is no longer active.'); return setStep(1); }
+
+  const player = document.getElementById('playerName').value.trim();
+  if (!player) return showAppAlert('error', 'Enter your name.');
+  const features = Store.get('features') || Store.DEFAULTS.features;
+  const mems = Store.get('memberships') || Store.DEFAULTS.memberships;
+  const mem = mems.find(m => m.id === selection.membership) || mems[0];
+
+  if (Store.checkConflict(selection.courtId, selection.date, selection.start, selection.end))
+    return showAppAlert('error', 'Slot was just booked by someone else.');
+
+  if (features.slotCapacity) {
+    const maxP = court?.maxPlayers || 99;
+    const current = Store.getSlotPlayerCount(selection.courtId, selection.date, selection.start, selection.end);
+    if (current + selection.players > maxP) return showAppAlert('error', `Not enough capacity. Only ${maxP - current} spots left.`);
+  }
+
+  if (features.concurrencyLock) {
+    if (!Store.acquireLock(selection.courtId, selection.date, selection.start, selection.end, player, mem?.priority || 0))
+      return showAppAlert('error', 'Another user has priority on this slot.');
+  }
+
+  const cost = Store.calcCost(
+    selection.courtId, selection.start, selection.end,
+    selection.membership, selection.equipment, selection.promoCode, selection.players
+  );
+
+  // 1. Generate unique booking ID
+  const newId = 'bk_' + Math.floor(Math.random() * 10000000);
+
+  // 2. Prepare payload matching Supabase layout
+  const newBooking = {
+    id: newId,
+    court_id: selection.courtId,
+    court_name: court.name,
+    sport: court.sport,
+    player: player,
+    user_email: Auth.get()?.user?.email || player.replace(/\s+/g, '').toLowerCase() + '@example.com',
+    date: selection.date,
+    start_time: selection.start,
+    end_time: selection.end,
+    membership: selection.membership,
+    players: selection.players,
+    cost: cost.total,
+    status: 'confirmed',
+    equipment: selection.equipment
+  };
+
+  // 3. Save to Supabase
+  const { error } = await supabaseClient.from('bookings').insert(newBooking);
+
+  if (error) {
+    console.error("Booking Error:", error);
+    showAppAlert("error", "Failed to confirm booking. Please try again.");
+    return;
+  }
+
+  // 4. Update Promo usage (local proxy updates DB)
+  if (selection.promoCode) await Store.applyPromo(selection.promoCode);
+
+  // 5. Release Lock
+  if (features.concurrencyLock) Store.releaseLock(selection.courtId, selection.date, selection.start, selection.end);
+
+  // 6. Notify System (Local cache for now)
+  Store.addNotification(`Booking confirmed: ${player} booked ${court.name} on ${selection.date} ${selection.start}–${selection.end}. Total: Rs.${cost.total}.`, 'success');
+
+  document.getElementById('playerName').value = '';
+  selection = { courtId: null, date: todayStr, start: '', end: '', membership: 'none', equipment: [], bundle: null, players: 1, promoCode: '' };
+
+  showAppAlert('success', `Booking confirmed for ${player}. Total: Rs.${cost.total}.`);
+  setStep(1);
+}
+
+/* ---- BOOKINGS TABLE ---- */
+function renderBookingsTable() {
+  const bookings = (Store.get('bookings') || []).filter(b => b.status !== 'cancelled' && !b.isEvent);
+  const tbody = document.getElementById('bookingTable');
+  document.getElementById('bookingCount').textContent = `${bookings.length} total`;
+  document.getElementById('emptyState').style.display = bookings.length ? 'none' : 'block';
+  tbody.innerHTML = bookings.map(b => `<tr>
+    <td><strong>${b.courtName}</strong></td><td>${b.sport}</td><td>${b.player}</td>
+    <td>${b.membership !== 'none' ? `<span class="badge badge-accent">${b.membership}</span>` : '<span class="badge badge-neutral">None</span>'}</td>
+    <td class="td-mono">${b.players || 1}</td>
+    <td class="td-mono">${b.date}</td><td class="td-mono">${b.start}–${b.end}</td>
+    <td class="td-mono">${Store.mins(b.end) - Store.mins(b.start)} min</td>
+    <td class="td-amount">Rs.${b.cost}</td>
+    <td><button class="btn btn-sm btn-danger" onclick="cancelBooking('${b.id}')">Cancel</button></td>
+  </tr>`).join('');
+}
+
+function cancelBooking(id) {
+  const bookings = Store.get('bookings') || [], b = bookings.find(x => x.id === id);
+  if (b) {
+    b.status = 'cancelled';
+    Store.releaseLock(b.courtId, b.date, b.start, b.end);
+    Store.addNotification(`Booking cancelled: ${b.player} — ${b.courtName} ${b.date} ${b.start}–${b.end}.`, 'warn');
+    supabaseClient.from('bookings').update({ status: 'cancelled' }).eq('id', id);
+  }
+
+  // Optimistic update
+  renderBookingsTable(); renderCourts(); showAppAlert('warn', 'Booking cancelled.');
+}
+
+function showAppAlert(type, msg) {
+  const el = document.getElementById('appAlert');
+  el.className = `alert alert-${type} show`; el.textContent = msg;
+  clearTimeout(showAppAlert._t); showAppAlert._t = setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+function setToday() { }
+
+// Init
+(async function initApp() {
+  Auth.injectUserBar();
+  const filterDateInput = document.getElementById('filterDate');
+  if (filterDateInput) selection.date = filterDateInput.value;
+  await Store.init();
+  renderCourts();
+})();
+
+// Automatically refresh UI on background cross-tab or Supabase real-time updates
+window.addEventListener('storage', (e) => {
+  if (e && e.key && !e.key.startsWith('cb_')) return;
+
+  // Only re-render if the user is not actively interacting with a modal to prevent UX jumps
+  if (step === 1) renderCourts();
+
+  if (e.key === 'cb_courts') {
+    if (step === 1) renderCourts();
+    else if (step === 2) renderDateTimeStep();
+    else if (step === 3) renderAddOns();
+    else if (step === 4) renderConfirm();
+  }
+
+  if (e.key === 'cb_bookings') {
+    if (step === 1) renderCourts();
+    else if (step === 2) renderSlotGrid();
+    renderBookingsTable();
+  }
+
+  if (e.key === 'cb_timeSlots' && step === 2) renderSlotGrid();
+});
