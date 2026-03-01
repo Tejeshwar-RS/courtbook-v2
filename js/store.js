@@ -134,9 +134,20 @@ const Store = (() => {
   /* ---- Sync Getter (Reading from Cache) ---- */
   function get(key) {
     if (key === 'courts') return cache.courts;
-    if (key === 'bookings') return cache.bookings;
-    if (key === 'events') return cache.events;
+    if (key === 'bookings') {
+      const activeEvents = JSON.parse(localStorage.getItem('cb_events')) || [];
+      return cache.bookings.filter(b => {
+        if (!b.isEvent) return true;
+        const eName = b.player.replace('[EVENT] ', '');
+        return activeEvents.some(ev => ev.name === eName && ev.date === b.date);
+      });
+    }
+    if (key === 'auth') return Auth.get();
     if (key === 'notifications') return cache.notifications;
+    if (key === 'events') {
+      if (cache.events && cache.events.length) return cache.events;
+      return JSON.parse(localStorage.getItem('cb_events')) || [];
+    }
 
     // Settings mappings
     if (key === 'features') return cache.settings.features;

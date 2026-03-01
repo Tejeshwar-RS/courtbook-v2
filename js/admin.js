@@ -112,7 +112,9 @@ async function saveCourt() {
   } else {
     const { error, data } = await supabaseClient.from('courts').insert({ name, sport, base_rate: rate, max_players: maxPlayers, team_size: teamSize, active: true }).select().single();
     if (!error) {
-      courts.push({ ...data, baseRate: rate, maxPlayers: maxPlayers, teamSize: teamSize });
+      if (!courts.some(c => c.id === data.id)) {
+        courts.push({ ...data, baseRate: rate, maxPlayers: maxPlayers, teamSize: teamSize });
+      }
       adminAlert('"' + name + '" added.');
     }
   }
@@ -304,8 +306,10 @@ async function addMembership() {
   var name = v('memName').trim();
   var discount = parseFloat(v('memDiscount')) / 100;
   var priority = parseInt(v('memPriority'));
-  if (!name || isNaN(discount) || discount <= 0 || isNaN(priority))
-    return adminAlert('Fill all membership fields.', 'error');
+
+  if (!name || isNaN(discount) || discount < 0 || isNaN(priority) || priority < 0)
+    return adminAlert('Please fill out all fields with valid numbers (0 or higher).', 'error');
+
   var mems = Store.get('memberships') || Store.DEFAULTS.memberships;
   var id = name.replace(/\s+/g, '_');
   if (mems.find(function (m) { return m.id === id; }))
@@ -540,14 +544,14 @@ async function addEvent() {
       id: 'ev_' + Math.floor(Math.random() * 100000) + '_' + cid,
       court_id: cid,
       court_name: court ? court.name : String(cid),
-      sport: 'Event',
+      sport: type,
       player: '[EVENT] ' + name,
       user_email: Auth.get()?.user?.email || 'admin@example.com',
       date: date,
       start_time: start,
       end_time: end,
       membership: 'none',
-      equipment: [],
+      equipment: '[]',
       players: 0,
       cost: 0,
       status: 'confirmed',
@@ -555,11 +559,16 @@ async function addEvent() {
     });
   });
 
+  const { error } = await supabaseClient.from('bookings').insert(newBookingsRaw);
+
+  if (error) {
+    console.error('Event insert error:', error);
+    return adminAlert('Failed to create event in database: ' + error.message, 'error');
+  }
+
   const evId = 'e' + Date.now();
   events.push({ id: evId, name, courtIds, date, start, end, type });
   Store.set('events', events);
-
-  const { error } = await supabaseClient.from('bookings').insert(newBookingsRaw);
 
   ['eventName', 'eventDate', 'eventStart', 'eventEnd'].forEach(function (id) {
     document.getElementById(id).value = '';
@@ -573,16 +582,25 @@ async function deleteEvent(i) {
   var events = Store.get('events') || [];
   var ev = events[i];
   var eventTag = '[EVENT] ' + ev.name;
-  events.splice(i, 1);
-  Store.set('events', events);
 
-  const { error } = await supabaseClient
+  const { error, count } = await supabaseClient
     .from('bookings')
-    .delete()
+    .delete({ count: 'exact' })
     .eq('is_event', true)
     .eq('player', eventTag)
     .eq('date', ev.date);
 
+  if (error) {
+    console.error('Event delete error:', error);
+    return adminAlert('Failed to delete event: ' + error.message, 'error');
+  }
+
+  if (count === 0) {
+    return adminAlert('Could not remove event (Database RLS Policy Blocked Deletion).', 'error');
+  }
+
+  events.splice(i, 1);
+  Store.set('events', events);
   renderEvents();
   adminAlert('Event removed and courts unblocked.');
 }
@@ -621,15 +639,27 @@ function renderBookings() {
 }
 
 async function adminCancelBooking(id) {
+  if (!confirm("Are you sure you want to cancel this booking?")) return;
+
   var bookings = Store.get('bookings') || [];
-  var b = bookings.find(function (x) { return x.id === id; });
-  if (b) {
-    b.status = 'cancelled';
+  var bIndex = bookings.findIndex(function (x) { return x.id === id; });
+  if (bIndex > -1) {
+    var b = bookings[bIndex];
     Store.releaseLock(b.courtId, b.date, b.start, b.end);
-    await supabaseClient.from('bookings').update({ status: 'cancelled' }).eq('id', id);
+
+    // Delete entirely from database instead of soft-deleting
+    const { error, count } = await supabaseClient.from('bookings').delete({ count: 'exact' }).eq('id', id);
+
+    if (error || count === 0) {
+      console.error('Admin delete error:', error);
+      return adminAlert('Failed to delete booking: ' + (error?.message || 'RLS Blocked'), 'error');
+    }
+
+    // Remove from local memory
+    bookings.splice(bIndex, 1);
   }
   renderBookings();
-  adminAlert('Booking cancelled.');
+  adminAlert('Booking cancelled and removed from system.');
 }
 
 function removeWaitlist(i) {

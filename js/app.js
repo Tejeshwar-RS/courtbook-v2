@@ -35,11 +35,22 @@ function renderCourts() {
     return Store.mins(p.start) <= nowMins && nowMins < Store.mins(p.end);
   });
 
-  const avail = courts.filter(c => !isCurrentlyBusy(c.id, bookings)).length;
+  function checkBusyStatus(courtId, bookings) {
+    const now = today.getHours() * 60 + today.getMinutes();
+    let busyReason = false;
+    bookings.forEach(b => {
+      if (b.courtId == courtId && b.date === todayStr && b.status !== 'cancelled' && Store.mins(b.start) <= now && now < Store.mins(b.end)) {
+        busyReason = b.isEvent ? (b.sport || 'Event') : true;
+      }
+    });
+    return busyReason;
+  }
+
+  const avail = courts.filter(c => !checkBusyStatus(c.id, bookings)).length;
   document.getElementById('availCount').textContent = `${avail} of ${courts.length} available`;
 
   document.getElementById('courtsGrid').innerHTML = courts.map(c => {
-    const busy = isCurrentlyBusy(c.id, bookings);
+    const busyStatus = checkBusyStatus(c.id, bookings);
     const allSlots = Store.generateSlots();
     const availableSlots = allSlots.filter(s => !Store.checkConflict(c.id, todayStr, s.start, s.end));
 
@@ -53,10 +64,12 @@ function renderCourts() {
     }
 
     const capacityNote = c.maxPlayers ? `<span style="font-size:0.7rem;color:var(--muted)">Max ${c.maxPlayers} players · Team of ${c.teamSize || 1}</span>` : '';
+    const badgeText = typeof busyStatus === 'string' ? busyStatus : (busyStatus ? 'Booked' : 'Available');
+    const badgeClass = typeof busyStatus === 'string' ? 'badge-accent' : (busyStatus ? 'badge-booked' : 'badge-available');
     return `<div class="card card-pad card-accent-top court-card">
       <div class="court-card-top">
         <div><div class="court-name">${c.name}</div><div class="court-sport">${c.sport}</div></div>
-        <span class="badge ${busy ? 'badge-booked' : 'badge-available'}">${busy ? 'Booked' : 'Available'}</span>
+        <span class="badge ${badgeClass}">${badgeText}</span>
       </div>
       <div class="court-rate-row">
         <span class="court-rate-label">Base Rate</span>
@@ -118,7 +131,7 @@ function renderSlotGrid() {
     const playerCount = Store.getSlotPlayerCount(selection.courtId, date, s.start, s.end);
     const maxP = court?.maxPlayers || 0;
     const full = features.slotCapacity && maxP > 0 && playerCount >= maxP;
-    const isEvent = (bookings.find(b => b.courtId == selection.courtId && b.date === date && b.start === s.start && b.isEvent));
+    const isEvent = (bookings.find(b => b.courtId == selection.courtId && b.date === date && b.isEvent && Store.isOverlap(s.start, s.end, b.start, b.end)));
     const sel = selection.start === s.start && selection.end === s.end;
     let cls = 'slot-btn', state = 'available';
     if (isEvent) { cls += ' slot-event'; state = 'event'; }
@@ -136,7 +149,8 @@ function renderSlotGrid() {
       if (peak) peakBadge = `<div style="margin-top:4px"><span class="peak-badge">${peak.multiplier}x Rate</span></div>`;
     }
 
-    const label = state === 'event' ? 'Event' : state === 'maintenance' ? 'Maintenance' : state === 'full' ? 'Full' : state === 'booked' ? 'Booked' : 'Available';
+    const eventLabel = isEvent ? (isEvent.sport || 'Event') : 'Event';
+    const label = state === 'event' ? eventLabel : state === 'maintenance' ? 'Maintenance' : state === 'full' ? 'Full' : state === 'booked' ? 'Booked' : 'Available';
     return `<div class="${cls}" onclick="${(state === 'available' || sel) ? `selectSlot('${s.start}','${s.end}')` : ''}" title="${s.start}–${s.end}: ${label}${maxP ? ` (${playerCount}/${maxP} players)` : ''}">
       <div style="font-size:0.78rem;font-weight:600;font-family:var(--mono)">${s.start}</div>
       <div style="font-size:0.68rem;color:inherit;margin-top:2px">${label}</div>
@@ -386,17 +400,33 @@ function renderBookingsTable() {
   </tr>`).join('');
 }
 
-function cancelBooking(id) {
-  const bookings = Store.get('bookings') || [], b = bookings.find(x => x.id === id);
-  if (b) {
-    b.status = 'cancelled';
-    Store.releaseLock(b.courtId, b.date, b.start, b.end);
-    Store.addNotification(`Booking cancelled: ${b.player} — ${b.courtName} ${b.date} ${b.start}–${b.end}.`, 'warn');
-    supabaseClient.from('bookings').update({ status: 'cancelled' }).eq('id', id);
+async function cancelBooking(id) {
+  if (!confirm("Are you sure you want to cancel this booking?")) return;
+
+  const { error, count } = await supabaseClient
+    .from('bookings')
+    .delete({ count: 'exact' })
+    .eq('id', id);
+
+  if (error || count === 0) {
+    console.error("Delete Error:", error || "Row Level Security BLOCKED the delete.");
+    return showAppAlert('error', 'Cancellation failed. You may not have database permissions to delete this booking.');
   }
 
-  // Optimistic update
-  renderBookingsTable(); renderCourts(); showAppAlert('warn', 'Booking cancelled.');
+  let bookings = Store.get('bookings') || [];
+  const bIndex = bookings.findIndex(x => x.id === id);
+
+  if (bIndex > -1) {
+    const b = bookings[bIndex];
+    Store.releaseLock(b.courtId, b.date, b.start, b.end);
+    Store.addNotification(`Booking cancelled: ${b.player} — ${b.courtName} ${b.date} ${b.start}–${b.end}.`, 'warn');
+
+    // Remove from local memory ONLY if Supabase confirms it dropped
+    bookings.splice(bIndex, 1);
+  }
+
+  // Update visually
+  renderBookingsTable(); renderCourts(); showAppAlert('warn', 'Booking cancelled and removed from system.');
 }
 
 function showAppAlert(type, msg) {
@@ -430,7 +460,7 @@ window.addEventListener('storage', (e) => {
     else if (step === 4) renderConfirm();
   }
 
-  if (e.key === 'cb_bookings') {
+  if (e.key === 'cb_bookings' || e.key === 'cb_events') {
     if (step === 1) renderCourts();
     else if (step === 2) renderSlotGrid();
     renderBookingsTable();

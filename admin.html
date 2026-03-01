@@ -634,8 +634,7 @@
     </main>
   </div>
 
-  <footer>CourtBook Admin Dashboard &bull; <a href="index.html" style="color:var(--accent);text-decoration:none">User
-      Portal</a></footer>
+  <footer>CourtBook Admin Dashboard</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/auth.js"></script>
@@ -643,9 +642,11 @@
     if (!Auth.requireAdmin()) { document.body.style.display = 'none'; }
     else {
       const s = Auth.get();
+      const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       document.getElementById('userBar').innerHTML = `
       <span style="font-size:0.78rem;color:#a3a3a3">${s?.user?.email || ''}</span>
       <span class="badge badge-accent">Admin</span>
+      <span style="font-size:0.78rem;color:#a3a3a3;margin-right:8px">${todayStr}</span>
       <button class="header-nav-link" onclick="Auth.logout()" style="cursor:pointer;background:none;border:1px solid #444;color:#a3a3a3">Sign Out</button>`;
     }
   </script>
