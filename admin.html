@@ -78,7 +78,7 @@
     <aside class="sidebar">
       <div class="sidebar-section-label">System</div>
       <div class="sidebar-item active" data-mod="userportal" onclick="showModule('userportal')"> <span
-          class="sidebar-dot"></span>Courts Overview</div>
+          class="sidebar-dot"></span>Courts Overview </div>
       <div class="sidebar-item" data-mod="features" onclick="showModule('features')"> <span
           class="sidebar-dot"></span>Feature Toggles</div>
       <div class="sidebar-divider"></div>
@@ -283,6 +283,11 @@
           <div style="font-size:0.82rem;font-weight:600;margin-bottom:1rem">Blocked Periods</div>
           <div class="form-grid-3">
             <div class="form-group"><label>Label</label><input type="text" id="blockLabel" placeholder="Maintenance">
+            </div>
+            <div class="form-group"><label>Court</label>
+              <div class="select-wrap"><select id="blockCourt">
+                  <option value="all">All Courts</option>
+                </select></div>
             </div>
             <div class="form-group"><label>Start</label><input type="time" id="blockStart"></div>
             <div class="form-group"><label>End</label><input type="time" id="blockEnd"></div>

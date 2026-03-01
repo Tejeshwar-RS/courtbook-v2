@@ -27,6 +27,14 @@ function renderCourts() {
   const courts = (Store.get('courts') || []).filter(c => c.active); // only active courts shown
   const bookings = Store.get('bookings') || [];
   const features = Store.get('features') || Store.DEFAULTS.features;
+
+  const pricing = Store.get('pricing') || Store.DEFAULTS.pricing;
+  const nowDt = new Date();
+  const nowMins = nowDt.getHours() * 60 + nowDt.getMinutes();
+  const isPeakRightNow = features.dynamicPricing && (pricing.peakHours || []).some(p => {
+    return Store.mins(p.start) <= nowMins && nowMins < Store.mins(p.end);
+  });
+
   const avail = courts.filter(c => !isCurrentlyBusy(c.id, bookings)).length;
   document.getElementById('availCount').textContent = `${avail} of ${courts.length} available`;
 
@@ -52,7 +60,7 @@ function renderCourts() {
       </div>
       <div class="court-rate-row">
         <span class="court-rate-label">Base Rate</span>
-        <span class="court-rate-value">Rs.${c.baseRate}/hr ${features.dynamicPricing ? '<span class="peak-badge" style="margin-left:4px">Peak rates apply</span>' : ''}</span>
+        <span class="court-rate-value">Rs.${c.baseRate}/hr ${isPeakRightNow ? '<span class="peak-badge" style="margin-left:4px">Peak rates apply</span>' : ''}</span>
       </div>
       ${capacityNote ? `<div style="margin:6px 0">${capacityNote}</div>` : ''}
       <div class="slot-label" style="margin-top:0.75rem">Available Slots Today</div>
@@ -95,8 +103,18 @@ function renderSlotGrid() {
 
   if (!slots.length) { grid.innerHTML = '<div class="empty-state">No slots configured. Ask admin to set up time slots.</div>'; return; }
 
+  const ts = Store.get('timeSlots') || Store.DEFAULTS.timeSlots;
+
   grid.innerHTML = slots.map(s => {
+    const isMaintenance = (ts.blocked || []).some(b =>
+      (b.courtId === 'all' || b.courtId == selection.courtId) &&
+      Store.isOverlap(s.start, s.end, b.start, b.end)
+    );
+
+    // Check conflicts (maintenance will also trigger `conflict` to be true due to checkConflict)
     const conflict = Store.checkConflict(selection.courtId, date, s.start, s.end);
+    const isBooked = conflict && !isMaintenance;
+
     const playerCount = Store.getSlotPlayerCount(selection.courtId, date, s.start, s.end);
     const maxP = court?.maxPlayers || 0;
     const full = features.slotCapacity && maxP > 0 && playerCount >= maxP;
@@ -104,8 +122,9 @@ function renderSlotGrid() {
     const sel = selection.start === s.start && selection.end === s.end;
     let cls = 'slot-btn', state = 'available';
     if (isEvent) { cls += ' slot-event'; state = 'event'; }
+    else if (isMaintenance) { cls += ' slot-maintenance'; state = 'maintenance'; }
     else if (full) { cls += ' slot-full'; state = 'full'; }
-    else if (conflict) { cls += ' slot-booked'; state = 'booked'; }
+    else if (isBooked) { cls += ' slot-booked'; state = 'booked'; }
     else if (sel) { cls += ' slot-selected'; }
 
     let peakBadge = '';
@@ -117,7 +136,7 @@ function renderSlotGrid() {
       if (peak) peakBadge = `<div style="margin-top:4px"><span class="peak-badge">${peak.multiplier}x Rate</span></div>`;
     }
 
-    const label = state === 'event' ? 'Event' : state === 'full' ? 'Full' : state === 'booked' ? 'Booked' : 'Available';
+    const label = state === 'event' ? 'Event' : state === 'maintenance' ? 'Maintenance' : state === 'full' ? 'Full' : state === 'booked' ? 'Booked' : 'Available';
     return `<div class="${cls}" onclick="${(state === 'available' || sel) ? `selectSlot('${s.start}','${s.end}')` : ''}" title="${s.start}–${s.end}: ${label}${maxP ? ` (${playerCount}/${maxP} players)` : ''}">
       <div style="font-size:0.78rem;font-weight:600;font-family:var(--mono)">${s.start}</div>
       <div style="font-size:0.68rem;color:inherit;margin-top:2px">${label}</div>
@@ -148,7 +167,8 @@ function updateCostPreview() {
   const preview = document.getElementById('costPreview');
   if (!selection.start || !selection.end) { preview.classList.remove('show'); return; }
   const cost = Store.calcCost(selection.courtId, selection.start, selection.end, selection.membership, selection.equipment, selection.promoCode, selection.players);
-  document.getElementById('costValue').textContent = `Rs.${cost.total}`;
+  const peakText = cost.peakMultiplier > 1 ? ` (${cost.peakMultiplier}x Peak)` : '';
+  document.getElementById('costValue').textContent = `Rs.${cost.total}${peakText}`;
   document.getElementById('costBreakdown').textContent = `${(cost.durMins / 60).toFixed(1)}hr · ${selection.players} player(s)`;
   preview.classList.add('show');
 }
@@ -263,7 +283,8 @@ function renderConfirm() {
   document.getElementById('confirmEquip').textContent = selection.equipment.length
     ? selection.equipment.map(id => equip.find(e => e.id === id)?.name || id).join(', ') + ` (+Rs.${cost.equipCost})` : 'None';
   document.getElementById('confirmPromo').textContent = selection.promoCode && cost.promoSaving ? `${selection.promoCode} (-Rs.${cost.promoSaving})` : 'None';
-  document.getElementById('confirmTotal').textContent = `Rs.${cost.total}`;
+  const peakText = cost.peakMultiplier > 1 ? ` (${cost.peakMultiplier}x Peak)` : '';
+  document.getElementById('confirmTotal').textContent = `Rs.${cost.total}${peakText}`;
 
   const lock = features.concurrencyLock ? Store.getPendingLock(selection.courtId, selection.date, selection.start, selection.end) : null;
   const lw = document.getElementById('lockWarning');
@@ -338,12 +359,13 @@ async function confirmBooking() {
   if (features.concurrencyLock) Store.releaseLock(selection.courtId, selection.date, selection.start, selection.end);
 
   // 6. Notify System (Local cache for now)
-  Store.addNotification(`Booking confirmed: ${player} booked ${court.name} on ${selection.date} ${selection.start}–${selection.end}. Total: Rs.${cost.total}.`, 'success');
+  const peakText = cost.peakMultiplier > 1 ? ` (${cost.peakMultiplier}x Peak)` : '';
+  Store.addNotification(`Booking confirmed: ${player} booked ${court.name} on ${selection.date} ${selection.start}–${selection.end}. Total: Rs.${cost.total}${peakText}.`, 'success');
 
   document.getElementById('playerName').value = '';
   selection = { courtId: null, date: todayStr, start: '', end: '', membership: 'none', equipment: [], bundle: null, players: 1, promoCode: '' };
 
-  showAppAlert('success', `Booking confirmed for ${player}. Total: Rs.${cost.total}.`);
+  showAppAlert('success', `Booking confirmed for ${player}. Total: Rs.${cost.total}${peakText}.`);
   setStep(1);
 }
 

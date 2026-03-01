@@ -178,6 +178,19 @@ small { font-size: 0.75rem; color: var(--muted); }
 .slot-chip.pending { background: var(--pending-bg); color: var(--pending); border-color: var(--pending-border); }
 .no-slots { font-size: 0.72rem; color: var(--muted-light); font-style: italic; }
 
+.slot-maintenance {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--surface-2),
+    var(--surface-2) 10px,
+    var(--white) 10px,
+    var(--white) 20px
+  );
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
 /* ---- COUNT BADGE ---- */
 .count-badge { font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 20px; background: var(--accent-light); color: var(--accent); font-family: var(--mono); }
 

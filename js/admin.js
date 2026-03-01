@@ -158,10 +158,23 @@ function renderTimeSlots() {
   document.getElementById('tsDuration').value = ts.slotDuration || 60;
   _previewSlots();
   var blocked = ts.blocked || [];
+  var courts = Store.get('courts') || [];
+
+  // Populate court dropdown
+  var courtSel = document.getElementById('blockCourt');
+  if (courtSel) {
+    var currCourt = courtSel.value;
+    courtSel.innerHTML = '<option value="all">All Courts</option>' + courts.map(function (c) {
+      return '<option value="' + c.id + '">' + c.name + ' (' + c.sport + ')</option>';
+    }).join('');
+    if (currCourt) courtSel.value = currCourt;
+  }
+
   document.getElementById('blockedList').innerHTML = blocked.length
     ? blocked.map(function (b, i) {
+      var courtName = b.courtId === 'all' ? 'All Courts' : (courts.find(c => c.id == b.courtId)?.name || 'Unknown Court');
       return '<div class="waitlist-item">' +
-        '<div class="waitlist-info"><strong>' + b.label + '</strong>' +
+        '<div class="waitlist-info"><strong>' + b.label + '</strong> <span class="badge badge-neutral">' + courtName + '</span>' +
         '<div class="waitlist-meta">' + b.start + ' – ' + b.end + '</div></div>' +
         '<button class="btn btn-sm btn-danger" onclick="removeBlocked(' + i + ')">Remove</button>' +
         '</div>';
@@ -194,13 +207,14 @@ async function saveHours() {
 }
 
 async function addBlocked() {
-  var label = v('blockLabel'), start = v('blockStart'), end = v('blockEnd');
-  if (!label || !start || !end || start >= end) return adminAlert('Fill a valid block period.', 'error');
+  var label = v('blockLabel'), courtId = v('blockCourt'), start = v('blockStart'), end = v('blockEnd');
+  if (!label || !courtId || !start || !end || start >= end) return adminAlert('Fill a valid block period.', 'error');
   var ts = Store.get('timeSlots') || Store.DEFAULTS.timeSlots;
   ts.blocked = ts.blocked || [];
-  ts.blocked.push({ label, start, end });
+  ts.blocked.push({ label, courtId, start, end });
   await Store.updateSetting('timeSlots', ts);
   ['blockLabel', 'blockStart', 'blockEnd'].forEach(function (id) { document.getElementById(id).value = ''; });
+  document.getElementById('blockCourt').value = 'all';
   renderTimeSlots();
   adminAlert('"' + label + '" blocked.');
 }
@@ -732,8 +746,15 @@ function renderUserPortal() {
   var courts = (Store.get('courts') || []).filter(c => c.active); // only active courts shown
   var bookings = Store.get('bookings') || [];
   var features = Store.get('features') || Store.DEFAULTS.features;
+  var pricing = Store.get('pricing') || Store.DEFAULTS.pricing;
+
   var today = new Date();
   var todayStr = today.toISOString().split('T')[0];
+
+  var nowMins = today.getHours() * 60 + today.getMinutes();
+  var isPeakRightNow = features.dynamicPricing && (pricing.peakHours || []).some(function (p) {
+    return Store.mins(p.start) <= nowMins && nowMins < Store.mins(p.end);
+  });
 
   function isCurrentlyBusy(courtId, bookingsArr) {
     var now = today.getHours() * 60 + today.getMinutes();
@@ -764,7 +785,7 @@ function renderUserPortal() {
       '</div>' +
       '<div class="court-rate-row">' +
       '<span class="court-rate-label">Base Rate</span>' +
-      '<span class="court-rate-value">Rs.' + c.baseRate + '/hr ' + (features.dynamicPricing ? '<span class="peak-badge" style="margin-left:4px">Peak rates apply</span>' : '') + '</span>' +
+      '<span class="court-rate-value">Rs.' + c.baseRate + '/hr ' + (isPeakRightNow ? '<span class="peak-badge" style="margin-left:4px">Peak rates apply</span>' : '') + '</span>' +
       '</div>' +
       (capacityNote ? '<div style="margin:6px 0">' + capacityNote + '</div>' : '') +
       '<div class="slot-label" style="margin-top:0.75rem">Available Slots Today</div>' +

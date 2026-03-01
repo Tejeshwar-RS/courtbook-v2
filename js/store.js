@@ -225,12 +225,16 @@ const Store = (() => {
 
     // Peak surcharge
     let peakSurcharge = 0;
+    let peakMultiplier = 1;
     if (features.dynamicPricing) {
       (pricing.peakHours || []).forEach(p => {
         const overlap = Math.max(0,
           Math.min(mins(end), mins(p.end)) - Math.max(mins(start), mins(p.start))
         );
-        if (overlap > 0) peakSurcharge += Math.ceil((overlap / 60) * court.baseRate * (p.multiplier - 1));
+        if (overlap > 0) {
+          peakSurcharge += Math.ceil((overlap / 60) * court.baseRate * (p.multiplier - 1));
+          if (p.multiplier > peakMultiplier) peakMultiplier = p.multiplier;
+        }
       });
     }
 
@@ -265,13 +269,20 @@ const Store = (() => {
     }
 
     const total = Math.max(0, base + peakSurcharge - memberSaving + equipCost - promoSaving);
-    return { base, peakSurcharge, memberSaving, equipCost, promoSaving, total, durMins };
+    return { base, peakSurcharge, peakMultiplier, memberSaving, equipCost, promoSaving, total, durMins };
   }
 
   /* ---- Overlap & conflict ---- */
   function isOverlap(s1, e1, s2, e2) { return s1 < e2 && e1 > s2; }
 
   function checkConflict(courtId, date, start, end, excludeId) {
+    const ts = get('timeSlots') || DEFAULTS.timeSlots;
+    const isBlocked = (ts.blocked || []).some(b =>
+      (b.courtId === 'all' || b.courtId == courtId) &&
+      isOverlap(start, end, b.start, b.end)
+    );
+    if (isBlocked) return true;
+
     return (get('bookings') || [])
       .filter(b => b.id !== excludeId)
       .some(b =>
